@@ -27,7 +27,7 @@
 //#include "wiring_private.h"
 #include "libraries/syslog/syslog.h"
 #include "angle.h"
-#include "system/system.h"
+#include "drivers/system/system.h"
 //#include "Arduino.h"
 
 #define WAIT_TC16_REGS_SYNC(x) while(x->COUNT16.STATUS.bit.SYNCBUSY);

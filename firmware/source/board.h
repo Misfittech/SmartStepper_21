@@ -22,27 +22,9 @@
 #define FW_VERSION_STR "0.01"
 
 
-//non-volatile memory periodic save rate
-// assuming we have two 8k sectors, with 10k erase cycles each
-// and we are saving 20 bytes each write, then
-// we have around 20 years if we save flash once a minute.
-// thus we have 20 years of "on time"
-#define NVM_DATA_SAVE_SECONDS	(60)
-
-//address in flash where parameters are stored
-#define FLASH_PARAMETERS_ADDRESS (0xFE000)
-
-#define FLASH_NVM_END_ADDRESS 	(0xFE000-1)
-#define FLASH_NVM_START_ADDRESS (0xFA000)
-
 
 #define UART_BAUD_RATE              (115200)
 //I2C ADDRESSES
-
-//for DSP library
-#define FFT_SIZE (256)
-
-
 
 //this is hte lowest priority IRQ number
 #define LOWEST_IRQ_PRIORITY ( (1<<__NVIC_PRIO_BITS) - 1)
@@ -68,7 +50,6 @@
 
 
 
-#define MCLK0_GCLK	(const pin_t){PIN_PA15, GCLK, PERIPHERAL_MUX_M, 0, PERPIHERAL_GPIO_OUTPUT_HIGH}
 
 
 

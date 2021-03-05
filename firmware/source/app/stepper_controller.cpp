@@ -27,8 +27,8 @@
 #include "board.h"
 #include <inttypes.h>
 #include "steppin.h"
-#include "system/system.h"
-#include "drivers/watchdog/watchdog.h"
+#include "drivers/system/system.h"
+#include "drivers/wdt/wdt.h"
 
 
 #define WAIT_TC16_REGS_SYNC(x) while(x->COUNT16.STATUS.bit.SYNCBUSY);

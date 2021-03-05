@@ -22,7 +22,7 @@ __STATIC_INLINE bool_t NVIC_IsEnabledIRQ(IRQn_Type IRQn)
 static IRQn_Type getIRQNumber(Sercom *ptrSercom, uint32_t bit)
 {
 
-#if defined(__SAMD51__)
+#if defined(__SAMD51__) || defined(__SAME51__)
 	if( ptrSercom == SERCOM0)
 	{
 		if (bit==0) return SERCOM0_0_IRQn;
@@ -86,27 +86,27 @@ static IRQn_Type getIRQNumber(Sercom *ptrSercom, uint32_t bit)
 #else
 	if( ptrSercom == SERCOM0)
 	{
-		return SERCOM0_0_IRQn;
+		return SERCOM0_IRQn;
 	}
 	else if(ptrSercom== SERCOM1)
 	{
-		return  SERCOM1_0_IRQn;
+		return  SERCOM1_IRQn;
 	}
 	else if(ptrSercom == SERCOM2)
 	{
-		return  SERCOM2_0_IRQn;
+		return  SERCOM2_IRQn;
 	}
 	else if(ptrSercom== SERCOM3)
 	{
-		return  SERCOM3_0_IRQn;
+		return  SERCOM3_IRQn;
 	}
 	else if(ptrSercom == SERCOM4)
 	{
-		return  SERCOM4_0_IRQn;
+		return  SERCOM4_IRQn;
 	}
 	else if(ptrSercom == SERCOM5)
 	{
-		return  SERCOM5_0_IRQn;
+		return  SERCOM5_IRQn;
 	}
 #endif
 	ERROR("Invalid serial com");
@@ -122,7 +122,7 @@ bool disableInterrupt(Sercom *ptrSercom)
 	//ret=NVIC_IsEnabledIRQ(num);
 	if (ret)
 	{
-#if defined(__SAMD51__)
+#if defined(__SAMD51__) || defined(__SAME51__)
 		uint32_t i;
 		for(i=0; i<4; i++)
 		{
@@ -141,7 +141,7 @@ void restoreInterrupt(Sercom *ptrSercom, bool_t preState)
 	if (preState)
 	{
 		num=getIRQNumber(ptrSercom,0);
-#if defined(__SAMD51__)
+#if defined(__SAMD51__) || defined(__SAME51__)
 		uint32_t i;
 		for(i=0; i<4; i++)
 		{
@@ -190,7 +190,7 @@ bool enableSercomNVICAndClocks(Sercom *ptrHw, SercomISR isrHandler, void *ptrCal
 	uint32_t num;
 	ASSERT(ptrHw);
 
-#if defined(__SAMD51__)
+#if defined(__SAMD51__) || defined(__SAME51__)
 	uint32_t slowClock;
 	uint32_t isr_priority=0;//(1<<__NVIC_PRIO_BITS) - 1;
 
@@ -355,7 +355,7 @@ bool enableSercomNVICAndClocks(Sercom *ptrHw, SercomISR isrHandler, void *ptrCal
 	Callbacks[num]=isrHandler;
 	CallbackParameters[num]=ptrCallbackParam;
 
-#if defined(__SAMD51__)
+#if defined(__SAMD51__) || defined(__SAME51__)
 	  GCLK->PCHCTRL[gClkId].reg = GENERIC_CLOCK_GENERATOR_48M | (1 << GCLK_PCHCTRL_CHEN_Pos);
 	  GCLK->PCHCTRL[slowClock].reg = GENERIC_CLOCK_GENERATOR_1M | (1 << GCLK_PCHCTRL_CHEN_Pos);
 	  restoreInterrupt(ptrHw,true);

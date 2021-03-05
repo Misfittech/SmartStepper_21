@@ -116,7 +116,7 @@ bool SPI::init(uint32_t frequency,SPIMode_t mode,SPIDataOrder_t ord, uint32_t da
 
 	//Setting the CTRLA register
 	 int32_t dopo=-1;
-#if defined(__SAMD51__)
+#if defined(__SAMD51__) || defined(__SAME51__)
 	  if (_pinMosi.id == 0 && _pinSck.id ==1)
 	 {
 		 dopo=0;
@@ -149,7 +149,7 @@ bool SPI::init(uint32_t frequency,SPIMode_t mode,SPIDataOrder_t ord, uint32_t da
 		 ERROR("MOSI and SCK pads are not correct");
 		 return false;
 	 }
-#if defined(__SAMD51__)
+#if defined(__SAMD51__) || defined(__SAME51__)
 	 _pSercom->SPI.CTRLA.reg =	SERCOM_SPI_CTRLA_MODE(0x3)  |
 			SERCOM_SPI_CTRLA_DOPO(dopo) |
 			SERCOM_SPI_CTRLA_DIPO(_pinMiso.id) |
