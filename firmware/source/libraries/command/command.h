@@ -89,7 +89,7 @@
 //const char ANSI_UP[]= {ASCII_ESC,'[','A',0};
 
 typedef struct {
-	UART *ptrUart;
+	CharDevice *ptrUart;
 	uint8_t data;
 	char buffer[MAX_CMD_LENGTH];
 
@@ -134,9 +134,9 @@ int CommandPrintf(sCmdUart *ptrUart,const char *fmt, ...);
 #endif
 
 
-int CommandInit(sCmdUart *ptrCmdUart, UART *ptrUart);
+int CommandInit(sCmdUart *ptrCmdUart, CharDevice *ptrUart);
 unsigned int CommandParse(sCmdUart *ptrUart,sCommand *ptrCmds, char *str, char delimitor);
-int CommandProcess(sCmdUart *ptrUart,sCommand *ptrCmds, char delimitor, char *cmdPrompt);
+int CommandProcess(sCmdUart *ptrUart,sCommand *ptrCmds, char delimitor, const char *cmdPrompt);
 
 
 

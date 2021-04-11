@@ -34,6 +34,7 @@
 #include "libraries/syslog/syslog.h"
 #include "libraries/libc/vsnprintf.h"
 #include "drivers/wdt/wdt.h"
+#include "drivers/supc/supc.h"
 
 #pragma GCC push_options
 #pragma GCC optimize ("-Ofast")
@@ -45,7 +46,7 @@ volatile bool enableState=true;
 
 int32_t dataEnabled=0;
 
-StepperCtrl stepperCtrl;
+extern StepperCtrl stepperCtrl;
 
 
 int menuCalibrate(int argc, char *argv[])
@@ -464,48 +465,48 @@ int dirPin(int argc, char *argv[])
 
 
 
-void TC5_Handler()
-{
-	//	static bool led=false;
-	//	YELLOW_LED(led);
-	//	led=!led;
-	//interrupts(); //allow other interrupts
-	if (TC5->COUNT16.INTFLAG.bit.OVF == 1)
-	{
-		int error=0;
-
-
-		error=(stepperCtrl.processFeedback()); //handle the control loop
-		YELLOW_LED(error);
-		//#ifdef PIN_ENABLE
-		//		GPIO_OUTPUT(PIN_ERROR);
-		//		bool level;
-		//		level = !NVM->SystemParams.errorLogic;
-		//		if (error)
-		//		{	//assume high is inactive and low is active on error pin
-		//			digitalWrite(PIN_ERROR,level);
-		//		}else
-		//		{
-		//			digitalWrite(PIN_ERROR,!level);
-		//		}
-		//#else
-		//
-		//		if (NVM->SystemParams.errorPinMode == ERROR_PIN_MODE_ERROR)
-		//		{
-		//			GPIO_OUTPUT(PIN_ERROR);
-		//			if (error)
-		//			{	//assume high is inactive and low is active on error pin
-		//				digitalWrite(PIN_ERROR,LOW);
-		//			}else
-		//			{
-		//				digitalWrite(PIN_ERROR,HIGH);
-		//			}
-		//		}
-		//#endif
-		TC5->COUNT16.INTFLAG.bit.OVF = 1;    // writing a one clears the flag ovf flag
-	}
-
-}
+//void TC5_Handler()
+//{
+//	//	static bool led=false;
+//	//	YELLOW_LED(led);
+//	//	led=!led;
+//	//interrupts(); //allow other interrupts
+//	if (TC5->COUNT16.INTFLAG.bit.OVF == 1)
+//	{
+//		int error=0;
+//
+//
+//		error=(stepperCtrl.processFeedback()); //handle the control loop
+//		RED_LED(error);
+//		//#ifdef PIN_ENABLE
+//		//		GPIO_OUTPUT(PIN_ERROR);
+//		//		bool level;
+//		//		level = !NVM->SystemParams.errorLogic;
+//		//		if (error)
+//		//		{	//assume high is inactive and low is active on error pin
+//		//			digitalWrite(PIN_ERROR,level);
+//		//		}else
+//		//		{
+//		//			digitalWrite(PIN_ERROR,!level);
+//		//		}
+//		//#else
+//		//
+//		//		if (NVM->SystemParams.errorPinMode == ERROR_PIN_MODE_ERROR)
+//		//		{
+//		//			GPIO_OUTPUT(PIN_ERROR);
+//		//			if (error)
+//		//			{	//assume high is inactive and low is active on error pin
+//		//				digitalWrite(PIN_ERROR,LOW);
+//		//			}else
+//		//			{
+//		//				digitalWrite(PIN_ERROR,HIGH);
+//		//			}
+//		//		}
+//		//#endif
+//		TC5->COUNT16.INTFLAG.bit.OVF = 1;    // writing a one clears the flag ovf flag
+//	}
+//
+//}
 
 //check the NVM and set to defaults if there is any
 void validateAndInitNVMParams(void)
@@ -513,6 +514,7 @@ void validateAndInitNVMParams(void)
 
 	if (false == ParametersValid((void *)&NVM->sPID,sizeof(NVM->sPID)))
 	{
+		LOG("test");
 		nvmWrite_sPID(0.2,0.002, 0.00);
 	}
 
@@ -548,63 +550,35 @@ void validateAndInitNVMParams(void)
 
 
 
-void SYSCTRL_Handler(void)
+void isr_bod33(void)
 {
-	if (SYSCTRL->INTFLAG.reg & SYSCTRL_INTFLAG_BOD33DET)
-	{
-		eepromFlush(); //flush the eeprom
-		SYSCTRL->INTFLAG.reg |= SYSCTRL_INTFLAG_BOD33DET;
-	}
+	eepromFlush(); //flush the eeprom
 }
 
-// Wait for synchronization of registers between the clock domains
-static __inline__ void syncBOD33(void) __attribute__((always_inline, unused));
-static void syncBOD33(void)  {
-	//int32_t t0=1000;
-	while (SYSCTRL->PCLKSR.bit.BOD33RDY==1)
-	{
-		//		t0--;
-		//		if (t0==0)
-		//		{
-		//			break;
-		//		}
-	}
-}
+
 static void configure_bod(void)
 {
-	//syncBOD33();
-	//SYSCTRL->BOD33.reg=0; //disable BOD33 before starting
-	//syncBOD33();
-	SYSCTRL->BOD33.reg=SYSCTRL_BOD33_ACTION_INTERRUPT | //generate interrupt when BOD is triggered
-			SYSCTRL_BOD33_LEVEL(48) | //about 3.2V
-			//SYSCTRL_BOD33_HYST | //enable hysteresis
-			SYSCTRL_BOD33_ENABLE; //turn module on
-
-	LOG("BOD33 %02X", SYSCTRL->BOD33.reg );
-	SYSCTRL->INTENSET.reg |= SYSCTRL_INTENSET_BOD33DET;
-
-	NVIC_SetPriority(SYSCTRL_IRQn, 1); //make highest priority as we need to save eeprom
-	// Enable InterruptVector
-	NVIC_EnableIRQ(SYSCTRL_IRQn);
+	setBrownOutCallback(3000, isr_bod33);
 }
 void NZS::processRS485(void)
 {
-	if (_rs485Coms.available()>0)
-	{
-		size_t n,x;
-		uint32_t src;
-		uint8_t data[MAX_COMM_MESSAGE_SIZE]={0};
-		n=_rs485Coms.read(&src,data,sizeof(data));
-		LOG("Read %d from %d", n,src);
-		//LOG("data: %s", data);
-		n=processCommand(src,data,n);
-	}
+//	if (_rs485Coms.available()>0)
+//	{
+//		size_t n,x;
+//		uint32_t src;
+//		uint8_t data[MAX_COMM_MESSAGE_SIZE]={0};
+//		n=_rs485Coms.read(&src,data,sizeof(data));
+//		LOG("Read %d from %d", n,src);
+//		//LOG("data: %s", data);
+//		n=processCommand(src,data,n);
+//	}
 }
 size_t NZS::sendResponse(uint32_t dst, uint8_t *ptrData, size_t len)
 {
-	delay_ms(100); //wait for a bit before sending response
-	LOG("sending response of %d bytes",len);
-	return _rs485Coms.write(dst,ptrData,len);
+//	delay_ms(100); //wait for a bit before sending response
+//	LOG("sending response of %d bytes",len);
+//	return _rs485Coms.write(dst,ptrData,len);
+	return 0;
 }
 
 size_t NZS::processCommand(uint32_t src, uint8_t *ptrData, size_t len)
@@ -618,7 +592,7 @@ size_t NZS::processCommand(uint32_t src, uint8_t *ptrData, size_t len)
 	static uint8_t num_last_data; 
 	static uint32_t last_data[2]; 
 
-
+#if 0
 	switch (cmd)
 	{
 	case MSG_ACK_REQ: //ack request
@@ -641,7 +615,7 @@ size_t NZS::processCommand(uint32_t src, uint8_t *ptrData, size_t len)
 		uint32_t addr;
 		memcpy(&addr, &ptrData[1], sizeof(uint32_t));
 		LOG("Setting address %d",addr);
-		_rs485Coms.setAddress(addr);
+		//_rs485Coms.setAddress(addr);
 		
 		resp[1]=(uint8_t)cmd; //send ACK for set id
 		memcpy(&resp[2], &addr, sizeof(uint32_t));
@@ -748,7 +722,7 @@ size_t NZS::processCommand(uint32_t src, uint8_t *ptrData, size_t len)
 		resp[1]=(uint8_t)cmd; //send ACK for cmd
 		sendResponse(src,resp,2);
 		
-		ret = stepperCtrl.home(0);
+		ret = stepperCtrl.home_to_stall(0);
 		if (ret)
 		{
 			LOG("Home good");
@@ -788,6 +762,7 @@ size_t NZS::processCommand(uint32_t src, uint8_t *ptrData, size_t len)
 	default:
 		return 0;
 	}
+#endif 
 	return 0;
 }
 void NZS::begin(void)
@@ -799,9 +774,9 @@ void NZS::begin(void)
 	//set up the flash correctly on the board.
 	flashInit();
 
-	_rs485_uart.init(RS485_BAUD_RATE, PIN_RS485_TX, PIN_RS485_RX, PIN_RS485_EN);
-	_debug_uart.init(SERIAL_BAUD, PIN_HMI_TX, PIN_HMI_RX);
-	SysLogInit(&_debug_uart, LOG_ALL);
+	//_rs485_uart.init(RS485_BAUD_RATE, PIN_RS485_TX, PIN_RS485_RX, PIN_RS485_EN);
+	//_debug_uart.init(SERIAL_BAUD, PIN_HMI_TX, PIN_HMI_RX);
+	//SysLogInit(&_debug_uart, LOG_ALL);
 
 	LOG("Power up!");
 
@@ -810,7 +785,7 @@ void NZS::begin(void)
 	{
 		addr=NVM->SystemParams.rs485_addr;
 	}
-	_rs485Coms.init(&_rs485_uart,addr);
+	//_rs485Coms.init(&_rs485_uart,addr);
 	
 	
 
@@ -868,7 +843,7 @@ void NZS::begin(void)
 #endif
 
 	LOG("command init!");
-	commandsInit(&_debug_uart,nullptr); //setup command handler system
+	//commandsInit(&_debug_uart,nullptr); //setup command handler system
 
 
 	stepCtrlError=STEPCTRL_NO_CAL;
@@ -876,7 +851,7 @@ void NZS::begin(void)
 
 	while (STEPCTRL_NO_ERROR != stepCtrlError)
 	{
-		WDTKick();
+		wdtClear();
 		LOG("init the stepper controller");
 		stepCtrlError=stepperCtrl.begin(); //start controller before accepting step inputs
 
@@ -900,7 +875,7 @@ void NZS::begin(void)
 
 		if (STEPCTRL_NO_CAL == stepCtrlError)
 		{
-			WDTKick();
+			wdtClear();
 			LOG("You need to Calibrate");
 			
 #ifndef DISABLE_LCD
@@ -912,9 +887,9 @@ void NZS::begin(void)
 			//TODO add code here for LCD and command line loop
 			while(false == stepperCtrl.calibrationValid())
 			{
-				WDTKick();
+				wdtClear();
 				commandsProcess(); //handle commands
-				processRS485(); //handle RS485 commands
+				
 #ifndef DISABLE_LCD
 				Lcd.process();
 #endif
@@ -926,7 +901,7 @@ void NZS::begin(void)
 
 		if (STEPCTRL_NO_ENCODER == stepCtrlError)
 		{
-			LOG("AS5047D not working");
+			LOG("Encoder not working");
 			LOG(" try disconnecting power from board for 15+mins");
 			LOG(" you might have to short out power pins to ground");
 #ifndef DISABLE_LCD
@@ -948,8 +923,8 @@ void NZS::begin(void)
 	stepPinSetup(); //setup the step pin
 
 #ifdef PIN_ENABLE
-	//attachInterrupt(digitalPinToInterrupt(PIN_ENABLE), enableInput, CHANGE);
-	NVIC_SetPriority(EIC_IRQn, 0); //set port A interrupt as highest priority
+	//PinEnableInterrupt(PIN_ENABLE,BOTH_EDGES,enableInput);
+
 #else
 	//attachInterrupt(digitalPinToInterrupt(PIN_ERROR), enableInput, CHANGE);
 #endif
@@ -957,15 +932,7 @@ void NZS::begin(void)
 	SmartPlanner.begin(&stepperCtrl);
 	RED_LED(false);
 	LOG("SETUP DONE!");
-	
-	bool ret;
-	ret = stepperCtrl.home(0);
-	_rs485_status=NZS_STATUS_CLEARED;
-	if(ret)
-	{
-		NZS_SET_STATUS(_rs485_status,NZS_STATUS_HOMED);
-		
-	}
+
 		
 }
 
@@ -1054,11 +1021,11 @@ void NZS::loop(void)
 		stepperCtrl.enable(enableState);
 	}
 
-	//handle EEPROM
-	eepromData.angle=stepperCtrl.getCurrentAngle();
-	eepromData.encoderAngle=stepperCtrl.getEncoderAngle();
-	eepromData.valid=1;
-	eepromWriteCache((uint8_t *)&eepromData,sizeof(eepromData));
+//	//handle EEPROM
+//	eepromData.angle=stepperCtrl.getCurrentAngle();
+//	eepromData.encoderAngle=stepperCtrl.getEncoderAngle();
+//	eepromData.valid=1;
+//	eepromWriteCache((uint8_t *)&eepromData,sizeof(eepromData));
 
 	commandsProcess(); //handle commands
 	processRS485(); //handle RS485 commands

@@ -28,13 +28,14 @@ typedef enum {
 class SPI {
 public:
 
-	bool setup(Sercom *pSercom, pin_t mosi, pin_t miso, pin_t sck,pin_t cs);
+	bool setup(pin_t mosi, pin_t miso, pin_t sck,pin_t cs);
 
 	bool init(uint32_t frequency,SPIMode_t mode,SPIDataOrder_t ord, uint32_t dataSize);
 	size_t write(const uint8_t *ptrData, size_t bytes);
 	size_t read(uint8_t *ptrData, size_t cnt);
 	bool transfer(uint8_t txData, uint8_t *ptrRxData);
 	size_t transfer(const uint8_t *ptrTXData, uint8_t *ptrRXData, size_t cnt);
+	uint16_t transfer16(uint16_t txData);
 	bool setClockRate(uint32_t frequency);
 private:
 	pin_t _pinMosi;

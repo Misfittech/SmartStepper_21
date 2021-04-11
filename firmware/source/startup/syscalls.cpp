@@ -102,10 +102,10 @@ extern caddr_t _sbrk(int incr)
     lastMalloc = incr;
     heapUsed = (uint32_t) heap - (uint32_t) ((unsigned char *) &__HeapBase);
 
-#if defined DEBUG
-    __BKPT(3);  //if you hit this something allocated memory, which maybe you do not want... 
-#endif
-    for (;;) { }
+//#if defined DEBUG
+//    __BKPT(3);  //if you hit this something allocated memory, which maybe you do not want... 
+//#endif
+//    for (;;) { }
 
     return (caddr_t) prev_heap;
 }

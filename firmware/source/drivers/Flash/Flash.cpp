@@ -337,13 +337,16 @@ uint32_t flashWrite(const volatile void *flash_ptr,const void *data, uint32_t si
 		{
 			bool good=false;
 			uint32_t ii;
-			for (ii=0; ii<1; ii++) //seems we have to read flash multiple times to get good value
+			for (ii=0; ii<2; ii++) //seems we have to read flash multiple times to get good value
 			{
-				//volatile uint32_t x;
+				volatile uint32_t x;
 
 				NVMCTRL->CTRLA.bit.CACHEDIS0 = true;
 				NVMCTRL->CTRLA.bit.CACHEDIS1 = true;
 
+				__ASM volatile (" dsb":::"memory");
+				__ASM volatile (" isb":::"memory");
+				x= *(uint32_t *)0x004; //read address zero to flush flash cache
 				__ASM volatile (" dsb":::"memory");
 				__ASM volatile (" isb":::"memory");
 				if (*ptrPage == *ptr)
@@ -383,6 +386,8 @@ uint32_t flashWritePage(const volatile void *flash_ptr, const void *data, uint32
 
 	volatile uint32_t *dst_addr = (volatile uint32_t *)flash_ptr;
 	const uint8_t *src_addr = (uint8_t *)data;
+	
+	volatile uint32_t write_addr; 
 
 	if (0 != ((uint32_t)flash_ptr)%(FLASH_PAGE_SIZE))
 	{
@@ -413,6 +418,7 @@ uint32_t flashWritePage(const volatile void *flash_ptr, const void *data, uint32
 		InterruptEnable(isrState);
 
 		// Fill page buffer
+		write_addr=(uint32_t)dst_addr;
 		uint32_t i;
 		for (i=0; i<(FLASH_PAGE_SIZE/4) && size; i++) //we write 4 bytes at a time
 		{
@@ -425,7 +431,7 @@ uint32_t flashWritePage(const volatile void *flash_ptr, const void *data, uint32
 
 		isrState=InterruptDisable();
 		NVMCTRL->INTFLAG.bit.DONE=1;
-		NVMCTRL->ADDR.reg=(uint32_t)flash_ptr;
+		NVMCTRL->ADDR.reg=write_addr;
 		// Execute "WP" Write Page
 		NVMCTRL->CTRLB.reg = NVMCTRL_CTRLB_CMDEX_KEY | NVMCTRL_CTRLB_CMD_WP;	
 		wait_done();

@@ -30,78 +30,14 @@
 #include "drivers/system/system.h"
 //#include "Arduino.h"
 
-#define WAIT_TC16_REGS_SYNC(x) while(x->COUNT16.STATUS.bit.SYNCBUSY);
+
 
 //define the planner class as being global
 Planner SmartPlanner;
 
-static bool enterTC3CriticalSection()
+void isr_planner(void)
 {
-	bool state=NVIC_IS_IRQ_ENABLED(TC3_IRQn);
-	NVIC_DisableIRQ(TC3_IRQn);
-	return state;
-}
-
-static void exitTC3CriticalSection(bool prevState)
-{
-	if (prevState)
-	{
-		NVIC_EnableIRQ(TC3_IRQn);
-	} //else do nothing
-}
-
-
-
-
-void TC3_Init(void)
-{
-	// Enable GCLK for TC3
-	GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID( GCLK_CLKCTRL_ID_TCC2_TC3_Val )) ;
-	while (GCLK->STATUS.bit.SYNCBUSY);
-
-	TC3->COUNT16.CTRLA.reg &= ~TC_CTRLA_ENABLE;   // Disable TCx
-	WAIT_TC16_REGS_SYNC(TC3)                      // wait for sync
-
-	TC3->COUNT16.CTRLA.reg |= TC_CTRLA_MODE_COUNT16;   // Set Timer counter Mode to 16 bits
-	WAIT_TC16_REGS_SYNC(TC3)
-
-	TC3->COUNT16.CTRLA.reg |= TC_CTRLA_WAVEGEN_MFRQ; // Set TC as normal Normal Frq
-	WAIT_TC16_REGS_SYNC(TC3)
-
-	TC3->COUNT16.CTRLA.reg |= TC_CTRLA_PRESCALER_DIV2;   // Set perscaler
-	WAIT_TC16_REGS_SYNC(TC3)
-
-
-	TC3->COUNT16.CC[0].reg = F_CPU/PLANNER_UPDATE_RATE_HZ/2; //divide by two because of prescaler
-
-	WAIT_TC16_REGS_SYNC(TC3)
-
-
-	TC3->COUNT16.INTENSET.reg = 0;              // disable all interrupts
-	TC3->COUNT16.INTENSET.bit.OVF = 1;          // enable overfollow
-
-
-
-	NVIC_SetPriority(TC3_IRQn, 3);
-
-
-	// Enable InterruptVector
-	NVIC_EnableIRQ(TC3_IRQn);
-
-
-	// Enable TC
-	TC3->COUNT16.CTRLA.reg |= TC_CTRLA_ENABLE;
-	WAIT_TC16_REGS_SYNC(TC3);
-}
-
-
-void TC3_Handler(void)
-{
-	//interrupts(); //allow other interrupts
-	//do the planner tick
 	SmartPlanner.tick();
-	//SerialUSB.println('x');
-	TC3->COUNT16.INTFLAG.bit.OVF = 1; //clear interrupt by writing 1 to flag
 }
 
 void Planner::begin(StepperCtrl *ptrStepper)
@@ -110,7 +46,8 @@ void Planner::begin(StepperCtrl *ptrStepper)
 	ptrStepperCtrl=ptrStepper;
 	currentMode=PLANNER_NONE;
 	//setup the timer and interrupt as the last thing
-	TC3_Init();
+	_tc.setup(TC_PLANNER,GENERIC_CLOCK_GENERATOR_48M,GCLK_freq[GENERIC_CLOCK_GENERATOR_48M],TC_PRESCALER_DIV8);
+	_tc.init_periodic(isr_planner,PLANNER_UPDATE_RATE_HZ);
 }
 
 void Planner::tick(void)
@@ -150,22 +87,22 @@ void Planner::tick(void)
 void Planner::stop(void)
 {
 	bool state;
-	state = enterTC3CriticalSection();
+	state = _tc.enterCritical();
 	currentMode=PLANNER_NONE;
-	exitTC3CriticalSection(state);
+	_tc.exitCritical(state);
 }
 
 bool Planner::moveConstantVelocity(float finalAngle, float rpm)
 {
 	bool state;
-	state = enterTC3CriticalSection();
+	state = _tc.enterCritical();
 
 	//first determine if operation is in progress
 	if (PLANNER_NONE != currentMode)
 	{
 		//we are in operation return false
 		LOG("planner operational");
-		exitTC3CriticalSection(state);
+		_tc.exitCritical(state);
 		return false;
 	}
 
@@ -197,6 +134,6 @@ bool Planner::moveConstantVelocity(float finalAngle, float rpm)
 
 	currentMode=PLANNER_CV;
 
-	exitTC3CriticalSection(state);
+	_tc.exitCritical(state);
 	return true;
 }

@@ -35,19 +35,21 @@
     please support MisfitTech and open-source hardware by purchasing
 	products from MisfitTech, www.misifittech.net!
  *********************************************************************/
-#ifndef __A4954__H__
-#define __A4954__H__
+#ifndef __DRV8434__H__
+#define __DRV8434__H__
 
 #include "board.h"
-#include "angle.h"
-#include "sine.h"
+#include "app/angle.h"
+#include "libraries/sine/sine.h"
 #include "drivers/systick/systick.h"
+#include "drivers/TC/TC.h"
 
-#define A4954_NUM_MICROSTEPS (256)
-#define A4954_MIN_TIME_BETWEEN_STEPS_MICROS  (1000)
+#define DRV8434_NUM_MICROSTEPS (256)
+#define DRV8434_MIN_TIME_BETWEEN_STEPS_MICROS  (1000)
+#define DRV8434_MAX_MA  (2500) //mA max 
 
 //prevent someone for making a mistake with the code
-#if ((A4954_NUM_MICROSTEPS*4) != SINE_STEPS)
+#if ((DRV8434_NUM_MICROSTEPS*4) != SINE_STEPS)
 #error "SINE_STEPS must be 4x of Micro steps for the move function"
 #endif
 
@@ -66,17 +68,20 @@
  *
  */
 
-class A4954
+class DRV8434
 {
 private:
 	uint32_t lastStepMicros; // time in microseconds that last step happened
 	bool forwardRotation=true;
 	volatile bool enabled=true;
-
+	TC _tc; 
+	void setupDAC(void);
+	void setDAC(uint32_t DAC1, uint32_t DAC2);
+	
 public:
 	void begin(void);
 
-	//moves motor where the modulo of A4954_NUM_MICROSTEPS is a full step.
+	//moves motor where the modulo of DRV8434_NUM_MICROSTEPS is a full step.
 	int32_t move(int32_t stepAngle, uint32_t mA);
 
 	uint32_t microsSinceStep(void) {return micros()-lastStepMicros;};
@@ -88,4 +93,4 @@ public:
 
 
 
-#endif //__A4954__H__
+#endif //__DRV8434__H__

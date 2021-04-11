@@ -23,7 +23,7 @@
 #include "err_codes.h"
 #include <inttypes.h>
 #include <stdbool.h>
-#include "./drivers/UART/UART.h"
+#include "devices/chardevice.h"
 //#include "variant.h"
 
 
@@ -41,6 +41,7 @@
 
 #define SYSLOG_WRITE(buffer,nBytes)
 
+void     SysLogPrintf(const char *fmt, ...);
 
 #ifdef CMD_SERIAL_PORT
 #define SYSLOG_PUTS(x)
@@ -197,7 +198,7 @@ static inline const char * __file__( const char *filename ) {
 #endif
 
 
-void SysLogInit(UART *ptrUartHw, eLogLevel LevelToWrite);
+void SysLogInit(CharDevice *ptrUartHw, eLogLevel LevelToWrite);
 int SysLogDisable(void);
 int SysLogEnable(void);
 int SysLogIsEnabled(void);

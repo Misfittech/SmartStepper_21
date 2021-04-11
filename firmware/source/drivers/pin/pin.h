@@ -10,7 +10,7 @@
 
 #include "sam.h"
 #include <stdbool.h>
-
+#include "drivers/system/system.h"
 
 
 typedef enum {
@@ -86,14 +86,12 @@ typedef enum {
 	LOW_LEVEL,
 }InterruptType_t;
 
-typedef void (*voidFuncPtr)(void);
 
-#ifdef __cplusplus
-#include <functional>
-void PinEnableInterrupt(pin_t pin, InterruptType_t type, std::function<void()> ptrFunc);
+void PinEnableInterrupt(pin_t pin, InterruptType_t type, voidCallback_t callback);
 bool PinDisableInterrupt(pin_t pin); //returns true if interrupt was enabled
 void PinConfig(const pin_t pin);
-#endif
+
+void EICInit(void);
 
 #define PIN_GET_PORT(x) ((x)>>5)
 #define PIN_GET_PIN(x) ((x)&0x01F)

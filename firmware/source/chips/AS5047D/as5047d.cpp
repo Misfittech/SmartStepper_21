@@ -86,13 +86,14 @@ bool  AS5047D::begin(pin_t csPin)
 {
 #ifdef PIN_AS5047D_PWR
 	PinHigh(PIN_AS5047D_PWR);
+	PinSetAsOutput(PIN_AS5047D_PWR);
 #endif
 
 	PinSetAsOutput(PIN_AS5047D_CS);
 	PinSetAsOutput(PIN_MOSI);
 	PinSetAsOutput(PIN_SCK);
 	PinSetAsOutput(PIN_MISO);
-	PinSetAsOutput(PIN_AS5047D_PWR);
+	
 
 	PinLow(PIN_AS5047D_CS);
 	PinLow(PIN_MOSI);
@@ -119,7 +120,7 @@ bool  AS5047D::begin(pin_t csPin)
 
 	error=false;
 	_spi.setup(PIN_MOSI,PIN_MISO,PIN_SCK,PIN_AS5047D_CS);
-	_spi.init(500000,SPI_MODE1,MSB_FIRST, 8);
+	_spi.init(AS5047D_SPI_CLK,SPI_MODE1,MSB_FIRST, 8);
 
 	//SPISettings settingsA(5000000, MSBFIRST, SPI_MODE1);             ///400000, MSBFIRST, SPI_MODE1);
 	chipSelectPin=csPin;

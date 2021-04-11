@@ -22,6 +22,7 @@
 #include "steppin.h"
 #include "stepper_controller.h"
 #include "board.h"
+#include "drivers/GCLK/GCLK.h"
 
 extern StepperCtrl stepperCtrl;
 
@@ -51,13 +52,13 @@ void checkDir(void)
 	{
 		if (dir)
 		{
-			EIC->CONFIG[1].reg &= ~EIC_CONFIG_SENSE2_Msk;
-			EIC->CONFIG[1].reg |=  EIC_CONFIG_SENSE2_HIGH;
+			EIC->CONFIG[PIN_DIR.id/8].reg &= ~(EIC_CONFIG_SENSE0_Msk<<((PIN_DIR.id%8)*4));
+			EIC->CONFIG[PIN_DIR.id/8].reg |=  (EIC_CONFIG_SENSE0_HIGH_Val<<((PIN_DIR.id%8)*4));
 
 		} else
 		{
-			EIC->CONFIG[1].reg &= ~EIC_CONFIG_SENSE2_Msk;
-			EIC->CONFIG[1].reg |=  EIC_CONFIG_SENSE2_LOW;
+			EIC->CONFIG[PIN_DIR.id/8].reg &= ~(EIC_CONFIG_SENSE0_Msk<<((PIN_DIR.id%8)*4));
+			EIC->CONFIG[PIN_DIR.id/8].reg |=  (EIC_CONFIG_SENSE0_LOW_Val<<((PIN_DIR.id%8)*4));
 		}
 		lastDir=dir;
 	}
@@ -89,10 +90,10 @@ int64_t getSteps(void)
 	return steps;
 
 #else
-	EIC->INTENCLR.reg = EIC_INTENCLR_EXTINT11;
+	//EIC->INTENCLR.reg = EIC_INTENCLR_EXTINT11;
 	x=stepsChanged;
 	stepsChanged=0;
-	EIC->INTENSET.reg = EIC_INTENSET_EXTINT11;
+	//EIC->INTENSET.reg = EIC_INTENSET_EXTINT11;
 	return x;
 #endif
 }
@@ -106,7 +107,7 @@ static void stepInput(void)
 	static int dir=1;
 
 	//read our direction pin
-	//dir = digitalRead(PIN_DIR_INPUT);
+	dir = PinRead(PIN_DIR);
 
 	if (CW_ROTATION == NVM->SystemParams.dirPinRotation)
 	{
@@ -126,29 +127,16 @@ static void stepInput(void)
 #endif
 }
 
-void enableEIC(void)
-{
-	 PM->APBAMASK.reg |= PM_APBAMASK_EIC;
-	if (EIC->CTRL.bit.ENABLE == 0)
-	{
-		// Enable GCLK for IEC (External Interrupt Controller)
-		GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID(GCLK_CLKCTRL_ID_EIC_Val));
-
-		// Enable EIC
-		EIC->CTRL.bit.ENABLE = 1;
-		while (EIC->STATUS.bit.SYNCBUSY == 1) { }
-	}
-}
 
 
 
 
-
+#ifdef USE_TC_STEP
 void setupStepEvent(void)
 {
 	//we will set up the EIC to generate an even on rising edge of step pin
 	//make sure EIC is setup
-	enableEIC();
+	EICInit();
 
 
 	// Assign step pin to EIC
@@ -160,51 +148,55 @@ void setupStepEvent(void)
 
 
 	//***** setup EIC ******
-	EIC->EVCTRL.bit.EXTINTEO11=1; //enable event for EXTINT11
-	EIC->EVCTRL.bit.EXTINTEO10=1; //enable event for EXTINT10
+	EIC->EVCTRL.reg=(0x1 << PIN_STEP.id) | (0x1 << PIN_DIR.id);
+	//EIC->EVCTRL.bit.EXTINTEO10=1; //enable event for EXTINT10
 	//setup up external interurpt 11 to be rising edge triggered
 	//setup up external interurpt 10 to be both edge triggered
-	EIC->CONFIG[1].reg |= EIC_CONFIG_SENSE3_RISE | EIC_CONFIG_SENSE2_HIGH;
-
+//	
+	EIC->CONFIG[PIN_STEP.id/8].reg |= (EIC_CONFIG_SENSE0_RISE_Val<< ((PIN_STEP.id%8)*4));
+	EIC->CONFIG[PIN_DIR.id/8].reg |= (EIC_CONFIG_SENSE0_BOTH_Val<< ((PIN_DIR.id%8)*4));
+	
 	checkDir();
 
 	//disable actually generating an interrupt, we only want event triggered
-	EIC->INTENCLR.reg = EIC_INTENCLR_EXTINT11;
-	EIC->INTENCLR.reg = EIC_INTENCLR_EXTINT10;
+	EIC->INTENCLR.reg=(0x1 << PIN_STEP.id) | (0x1 << PIN_DIR.id);
+//	EIC->INTENCLR.reg = EIC_INTENCLR_EXTINT11;
+//	EIC->INTENCLR.reg = EIC_INTENCLR_EXTINT10;
 
 	//**** setup the event system ***
 	// Enable GCLK for EVSYS channel 0
-	PM->APBCMASK.reg |= PM_APBCMASK_EVSYS;
+	MCLK->APBBMASK.bit.EVSYS_=1;  
 
-	GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID(GCLK_CLKCTRL_ID_EVSYS_0_Val));
-	while (GCLK->STATUS.bit.SYNCBUSY);
-	GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID(GCLK_CLKCTRL_ID_EVSYS_1_Val));
-	while (GCLK->STATUS.bit.SYNCBUSY);
+	glck_enable_clock(GENERIC_CLOCK_GENERATOR_MAIN, EVSYS_GCLK_ID_0);
+	glck_enable_clock(GENERIC_CLOCK_GENERATOR_MAIN, EVSYS_GCLK_ID_1);
+//	GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID(GCLK_CLKCTRL_ID_EVSYS_0_Val));
+//	while (GCLK->STATUS.bit.SYNCBUSY);
+//	GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID(GCLK_CLKCTRL_ID_EVSYS_1_Val));
+//	while (GCLK->STATUS.bit.SYNCBUSY);
 
 	//setup the step pin to trigger event 0 on the TCC2 (step)
-	EVSYS->CHANNEL.reg=EVSYS_CHANNEL_CHANNEL(0)
-								| EVSYS_CHANNEL_EDGSEL_RISING_EDGE
-								| EVSYS_CHANNEL_EVGEN(EVSYS_ID_GEN_EIC_EXTINT_11)
+	EVSYS->Channel[0].CHANNEL.reg= EVSYS_CHANNEL_EDGSEL_RISING_EDGE 
+								| EVSYS_CHANNEL_EVGEN(EVSYS_ID_GEN_EIC_EXTINT_0 + PIN_STEP.id)
 								| EVSYS_CHANNEL_PATH_ASYNCHRONOUS;
 
-	EVSYS->USER.reg = 	EVSYS_USER_CHANNEL(1)
-								| EVSYS_USER_USER(EVSYS_ID_USER_TCC2_EV_0);
+	EVSYS->USER[EVSYS_ID_USER_TCC2_EV_0].reg = 	EVSYS_USER_CHANNEL(1);
 
 	//setup the dir pin to trigger event 2 on the TCC2 (dir change)
-	EVSYS->CHANNEL.reg=EVSYS_CHANNEL_CHANNEL(1)
-								| EVSYS_CHANNEL_EDGSEL_BOTH_EDGES
-								| EVSYS_CHANNEL_EVGEN(EVSYS_ID_GEN_EIC_EXTINT_10)
+	EVSYS->Channel[1].CHANNEL.reg= EVSYS_CHANNEL_EDGSEL_BOTH_EDGES
+								| EVSYS_CHANNEL_EVGEN(EVSYS_ID_GEN_EIC_EXTINT_0 + PIN_DIR.id)
 								| EVSYS_CHANNEL_PATH_ASYNCHRONOUS;
 
-	EVSYS->USER.reg = 	EVSYS_USER_CHANNEL(2)
-								| EVSYS_USER_USER(EVSYS_ID_USER_TCC2_EV_1);
+	EVSYS->USER[EVSYS_ID_USER_TCC2_EV_1].reg = 	EVSYS_USER_CHANNEL(2);
+								
 
 	//**** setup the Timer counter ******
-	PM->APBCMASK.reg |= PM_APBCMASK_TCC2;
+	MCLK->APBCMASK.bit.TCC2_=1; 
+	//PM->APBCMASK.reg |= PM_APBCMASK_TCC2;
 
 	// Enable GCLK for TCC2 (timer counter input clock)
-	GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID(GCLK_CLKCTRL_ID_TCC2_TC3_Val));
-	while (GCLK->STATUS.bit.SYNCBUSY);
+//	GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID(GCLK_CLKCTRL_ID_TCC2_TC3_Val));
+//	while (GCLK->SYNCBUSY.reg);
+	glck_enable_clock(GENERIC_CLOCK_GENERATOR_MAIN, TCC2_GCLK_ID);
 
 
 
@@ -288,7 +280,9 @@ void setupStepEvent(void)
 //		TC4->COUNT16.CTRLBCLR.bit.DIR=1;
 //	}
 //}
-
+#else
+void setupStepEvent(void) {}
+#endif
 
 void stepPinSetup(void)
 {
@@ -306,8 +300,10 @@ void stepPinSetup(void)
 
 
 #else
-	attachInterrupt(digitalPinToInterrupt(PIN_STEP_INPUT), stepInput, RISING);
-	NVIC_SetPriority(EIC_IRQn, 0); //set port A interrupt as highest priority
+	PinConfig(PIN_DIR);
+	PinEnableInterrupt(PIN_STEP,RISING_EDGE,stepInput);
+//	attachInterrupt(digitalPinToInterrupt(PIN_STEP_INPUT), stepInput, RISING);
+//	NVIC_SetPriority(EIC_IRQn, 0); //set port A interrupt as highest priority
 #endif
 
 }

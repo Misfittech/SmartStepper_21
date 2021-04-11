@@ -14,9 +14,10 @@
  *********************************************************************/
 #include "syslog.h"
 #include "board.h"
-#include "drivers/UART/UART.h"
 #include "libraries/libc/vsnprintf.h"
-//#include "./libraries/RTT/SEGGER_RTT.h"
+#ifdef SYSLOG_RTT
+#include "./libraries/RTT/SEGGER_RTT.h"
+#endif
 
 #define ANSI_WHITE 		"\033[37m"
 #define ANSI_NORMAL 	"\033[0m"
@@ -33,9 +34,9 @@
 #define ANSI_BLACK      "\033[30m"
 #define ANSI_BELL_AND_RED 		"\a\033[31m"
 
-#define NEW_LINE "\n\r"
+#define NEW_LINE "\n"
 
-UART *ptrSerial=NULL;
+CharDevice *ptrSerial=NULL;
 eLogLevel SyslogLevelToWrite;
 
 static char buffer[SYSLOG_BUFFER_SIZE];
@@ -62,13 +63,20 @@ int SysLogIsEnabled(void)
 }
 
 
+
 void SysLogPuts(const char *ptrStr)
 {
+#ifdef SYSLOG_RTT
+	SEGGER_RTT_Write(0,ptrStr, strlen(ptrStr));
+#endif 
 	//static bool lostMessage=false;
 	if (!SysLog_Enabled)
 		return;
 
-	ptrSerial->write((const uint8_t *)ptrStr,strlen(ptrStr));
+	if (ptrSerial)
+	{
+		ptrSerial->write((const uint8_t *)ptrStr,strlen(ptrStr));
+	}
 
 //	if (NULL == ptrSerial)
 //	{
@@ -79,8 +87,18 @@ void SysLogPuts(const char *ptrStr)
 //	}
 }
 
+void SysLogPrintf(const char *fmt, ...)
+{
+	 va_list ap;
+	char vastr[MAX_SYSLOG_STRING]={0};
+	va_start(ap, fmt);
+	_vsnprintf(&buffer[BufIndex], SYSLOG_BUFFER_SIZE - BufIndex,
+			(char *) fmt, ap);
+	va_end(ap);
+	SysLogPuts(vastr);
+}
 int SysLogInitDone=1;
-void SysLogInit(UART *ptrUartHw, eLogLevel LevelToWrite)
+void SysLogInit(CharDevice *ptrUartHw, eLogLevel LevelToWrite)
 {
 	ptrSerial=ptrUartHw;
 	SyslogLevelToWrite=LevelToWrite;

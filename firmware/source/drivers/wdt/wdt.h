@@ -28,7 +28,8 @@ typedef enum {
 }wdt_cycles;
 
 void wdtInit(wdt_cycles cycles);
-inline static void wdtClear(void) {WDT->CLEAR.reg=0xA5;}
+void wdtClear(void);
+
 
 
 

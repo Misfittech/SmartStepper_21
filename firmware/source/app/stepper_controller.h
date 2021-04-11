@@ -26,12 +26,13 @@
 
 #include "libraries/syslog/syslog.h"
 #include "board.h"
-#include "as5047d.h"
+#include "chips/AS5047D/AS5047d.h"
 //#include "A1333.h"
 #include "calibration.h"
-#include "A4954.h"
+#include "chips/DRV8434/DRV8434.h"
 //#include "A5995.h"
 #include "nonvolatile.h"
+#include "drivers/TC/TC.h"
 //#include "fet_driver.h" //for the NEMA23 10A
 
 
@@ -91,9 +92,10 @@ class StepperCtrl
 #ifdef A5995_DRIVER
 		A5995 stepperDriver;
 #else
-		A4954 stepperDriver;
+		DRV8434 stepperDriver;
 #endif
 #endif
+		TC _tc; //timer for the NZS PID
 		uint16_t startUpEncoder;
 		volatile int32_t ticks=0;
 		volatile Location_t locs[MAX_NUM_LOCATIONS];
@@ -156,7 +158,7 @@ class StepperCtrl
 
 
 	public:
-		bool home(int dir);
+		bool home_to_stall(int dir);
 		bool uncalMove(int32_t steps);
 		int64_t getDesiredLocation(void);
 		uint16_t getStartupEncoder(void) {return startUpEncoder;}

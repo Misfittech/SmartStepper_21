@@ -18,6 +18,8 @@
 
 typedef bool bool_t;
 
+
+
 #define HIGH (true)
 #define LOW (false)
 
@@ -34,6 +36,11 @@ typedef bool bool_t;
 #define TO_KHZ(x)  ((x) * 1000L) // use uppercase L to avoid confusion
 #define TO_MSEC(x) ((x) / 1000L )   // with the digit 1
 
+#define PACK            __attribute__((packed))
+#define WEAK            __attribute__((weak))
+#define INLINE          static inline __attribute__((always_inline))
+#define ALIGN(x)		__attribute__ ((aligned (x)))
+#define LIMIT(a, b)     (((int)(a) > (int)(b)) ? (int)(b) : (int)(a))
 
 #define POINTER(T)  typeof(T *)
 #define ARRAY(T, N) typeof(T [N])
@@ -59,11 +66,19 @@ typedef bool bool_t;
 #define unlikely(x)	__builtin_expect(!!(x), 0)
 
 
-#define WATCHDOG_ENABLE() {WDT->CONFIG.reg=WDT_CONFIG_PER_CYC16384; WDT->CTRLA.bit.WEN=1;}
-#define WATCHDOG_KICK() {WDT->CLEAR.reg=WDT_CLEAR_CLEAR_KEY;}
 
+#define SIGN(x) (((x)>=0) ? (1) : (0))
 
-
+#define DIVIDE_WITH_ROUND(x, divisor)(          \
+{                           \
+    typeof(x) __x = x;              \
+    typeof(divisor) __d = divisor;          \
+    (((typeof(x))-1) > 0 ||             \
+     ((typeof(divisor))-1) > 0 || (__x) > 0) ?  \
+        (((__x) + ((__d) / 2)) / (__d)) :   \
+        (((__x) - ((__d) / 2)) / (__d));    \
+}                           \
+)
 
 
 //get the priority of the currently active interrupt

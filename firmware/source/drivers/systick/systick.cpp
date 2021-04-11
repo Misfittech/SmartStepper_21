@@ -186,8 +186,10 @@ uint32_t micros(void)
 
 	return ((count+pend) * 1000) + (((SysTick->LOAD  - ticks)*(1048576/(F_CPU/1000000)))>>20);
 }
-
-void irq_handler_sys_tick(void)
+#ifdef __cplusplus
+extern "C" {
+#endif
+void SysTick_Handler(void)
 {
 	_milliTicks++;
 	_secTicks++;
@@ -226,5 +228,7 @@ void irq_handler_sys_tick(void)
 	}
 	//SystickCallback();
 }
-
+#ifdef __cplusplus
+}
+#endif
 

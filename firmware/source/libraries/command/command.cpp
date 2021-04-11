@@ -37,7 +37,7 @@ int strcicmp(char const *a, char const *b)
     }
 }
 
-int CommandInit(sCmdUart *ptrCmdUart, UART *ptrUart)
+int CommandInit(sCmdUart *ptrCmdUart, CharDevice *ptrUart)
 {
 	ptrCmdUart->ptrUart=ptrUart;
 	ptrCmdUart->histIndex=0;
@@ -273,7 +273,7 @@ unsigned int CommandParse(sCmdUart *ptrUart,sCommand *ptrCmds, char *str, char d
 }
 
 //This function will process commands from the UART
-int CommandProcess(sCmdUart *ptrUart,sCommand *ptrCmds, char delimitor, char *cmdPrompt)
+int CommandProcess(sCmdUart *ptrUart,sCommand *ptrCmds, char delimitor, const char *cmdPrompt)
 {
 	if(ptrUart->ptrUart->available()>0)
 	{

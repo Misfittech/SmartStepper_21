@@ -33,6 +33,7 @@
 //#include "drivers/rs485/rs485.h"
 #include "stepper_controller.h"
 #include "planner.h"
+
 //#include "libraries/comsproto/comsproto.h"
 
 
@@ -86,6 +87,7 @@ class NZS //nano Zero Stepper
 		//RS485 _rs485_uart;
 		//ComsProto _rs485Coms;
 		nzs_status_t _rs485_status; //bit field status
+		
 
 };
 

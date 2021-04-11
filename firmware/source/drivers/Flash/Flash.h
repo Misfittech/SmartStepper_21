@@ -23,6 +23,9 @@
 
 #define FLASH_USER_RESERVED (32) //first 32 bytes of user page is reserved
 
+#define FLASH_ERASE_SIZE (FLASH_BLOCK_SIZE)
+#define FLASH_MIN_PROGRAM_SIZE (FLASH_PAGE_SIZE)
+
 #define FLASH_ALLOCATE(name, size) \
 	__attribute__((__aligned__(FLASH_BLOCK_SIZE))) \
    const uint8_t name[(size+(FLASH_BLOCK_SIZE-1))/FLASH_BLOCK_SIZE*FLASH_BLOCK_SIZE] = { };
@@ -38,13 +41,14 @@ uint32_t flashWritePage(const volatile void *flash_ptr, const void *data, uint32
 //you can read by dereferencing pointer but we will add a read
 static inline uint32_t flashRead(const volatile void *flash_ptr, void *data, uint32_t size)
 {
-
+	volatile uint32_t x;
 	if (((uint32_t)flash_ptr+size)>(FLASH_SIZE+FLASH_ADDR))
 	{
 		ERROR("bad flash address 0x%X",(uint32_t)flash_ptr);
 		memset(data,0,size);
 		return 0;
 	}
+	x=*(uint32_t *) 0x004;  //flush cache by reading different address
 	bool isrState=InterruptDisable();
 	// The cache in Rev A isn't reliable when reading and writing to the NVM.
     NVMCTRL->CTRLA.bit.CACHEDIS0 = true;

@@ -33,6 +33,7 @@
 #define PLANNER_H_
 #include "board.h"
 #include "stepper_controller.h"
+#include "drivers/TC/TC.h"
 
 #define PLANNER_UPDATE_RATE_HZ (3000UL) //how often planner updates PID
 
@@ -52,6 +53,7 @@ class Planner
 		volatile float startAngle;
 		volatile float currentSetAngle;
 		volatile float tickIncrement;
+		TC	_tc; //timer for planner
 
 	public:
 		void begin(StepperCtrl *ptrStepper);

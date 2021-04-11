@@ -31,87 +31,26 @@
 #include "drivers/wdt/wdt.h"
 
 
-#define WAIT_TC16_REGS_SYNC(x) while(x->COUNT16.STATUS.bit.SYNCBUSY);
+StepperCtrl stepperCtrl;
 
-volatile bool TC5_ISR_Enabled=false;
-
-void setupTCInterrupts() {
-
-	PM->APBCMASK.bit.TC5_=1;
-	// Enable GCLK for TC4 and TC5 (timer counter input clock)
-	GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID(GCLK_CLKCTRL_ID_TC4_TC5_Val));
-	while (GCLK->STATUS.bit.SYNCBUSY);
-
-	TC5->COUNT16.CTRLA.reg &= ~TC_CTRLA_ENABLE;   // Disable TCx
-	WAIT_TC16_REGS_SYNC(TC5)                      // wait for sync
-
-	TC5->COUNT16.CTRLA.reg |= TC_CTRLA_MODE_COUNT16;   // Set Timer counter Mode to 16 bits
-	WAIT_TC16_REGS_SYNC(TC5)
-
-	TC5->COUNT16.CTRLA.reg |= TC_CTRLA_WAVEGEN_MFRQ; // Set TC as normal Normal Frq
-	WAIT_TC16_REGS_SYNC(TC5)
-
-	TC5->COUNT16.CTRLA.reg |= TC_CTRLA_PRESCALER_DIV1;   // Set perscaler
-	WAIT_TC16_REGS_SYNC(TC5)
-
-
-	TC5->COUNT16.CC[0].reg = F_CPU/NZS_CONTROL_LOOP_HZ;
-	WAIT_TC16_REGS_SYNC(TC5)
-
-
-	TC5->COUNT16.INTENSET.reg = 0;              // disable all interrupts
-	TC5->COUNT16.INTENSET.bit.OVF = 1;          // enable overfollow
-	//  TC5->COUNT16.INTENSET.bit.MC0 = 1;         // enable compare match to CC0
-
-
-	NVIC_SetPriority(TC5_IRQn, 2);
-
-
-	// Enable InterruptVector
-	NVIC_EnableIRQ(TC5_IRQn);
-
-
-	// Enable TC
-	TC5->COUNT16.CTRLA.reg |= TC_CTRLA_ENABLE;
-	WAIT_TC16_REGS_SYNC(TC5)
-
-}
-
-static void enableTCInterrupts() {
-
-	TC5_ISR_Enabled=true;
-	NVIC_EnableIRQ(TC5_IRQn);
-	TC5->COUNT16.INTENSET.bit.OVF = 1;
-	//  TC5->COUNT16.CTRLA.reg |= TC_CTRLA_ENABLE;    //Enable TC5
-	//  WAIT_TC16_REGS_SYNC(TC5)                      //wait for sync
-}
-
-static void disableTCInterrupts() {
-
-	TC5_ISR_Enabled=false;
-	//NVIC_DisableIRQ(TC5_IRQn);
-	TC5->COUNT16.INTENCLR.bit.OVF = 1;
-}
-
-static bool enterCriticalSection()
+void isr_timer()
 {
-	bool state=TC5_ISR_Enabled;
-	disableTCInterrupts();
-	return state;
-}
+	static uint32_t t=0;
+	volatile uint32_t x,dt;
+	dt=micros();
+	int error=0;
 
-static void exitCriticalSection(bool prevState)
-{
-	if (prevState)
-	{
-		enableTCInterrupts();
-	} //else do nothing
+	error=(stepperCtrl.processFeedback()); //handle the control loop
+	RED_LED(error);
+	dt=micros()-dt;
+	x=micros()-t;
+	t=micros();
 }
 
 
 void StepperCtrl::updateParamsFromNVM(void)
 {
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 
 	pPID.Kd=NVM->pPID.Kd*CTRL_PID_SCALING;
 	pPID.Ki=NVM->pPID.Ki*CTRL_PID_SCALING;
@@ -168,7 +107,7 @@ void StepperCtrl::updateParamsFromNVM(void)
 
 	stepperDriver.setRotationDirection(motorParams.motorWiring);
 
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 }
 
 
@@ -177,22 +116,22 @@ void  StepperCtrl::motorReset(void)
 	//when we reset the motor we want to also sync the motor
 	// phase.  Therefore we move forward a few full steps then back
 	// to sync motor phasing, leaving the motor at "phase 0"
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 
 		stepperDriver.move(0,motorParams.currentMa);
 		delay_ms(100);
-		stepperDriver.move(A4954_NUM_MICROSTEPS/2,motorParams.currentMa);
+		stepperDriver.move(DRV8434_NUM_MICROSTEPS/2,motorParams.currentMa);
 		delay_ms(100);
-		stepperDriver.move(A4954_NUM_MICROSTEPS,motorParams.currentMa);
+		stepperDriver.move(DRV8434_NUM_MICROSTEPS,motorParams.currentMa);
 		delay_ms(100);
-		stepperDriver.move(A4954_NUM_MICROSTEPS/2,motorParams.currentMa);
+		stepperDriver.move(DRV8434_NUM_MICROSTEPS/2,motorParams.currentMa);
 		delay_ms(100);
 
 	stepperDriver.move(0,motorParams.currentMa);
 	delay_ms(1000);
 
 	setLocationFromEncoder(); //measure new starting point
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 }
 
 void StepperCtrl::setLocationFromEncoder(void)
@@ -242,41 +181,40 @@ void StepperCtrl::setLocationFromEncoder(void)
 int64_t StepperCtrl::getZeroAngleOffset(void)
 {
 	int64_t x;
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 
 	x=zeroAngleOffset;
 
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 	return x;
 }
 
 void StepperCtrl::setAngle(int64_t angle)
 {
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 
 	zeroAngleOffset=getCurrentLocation()-angle;
 
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 }
 
 void StepperCtrl::setZero(void)
 {
 	//we want to set the starting angle to zero.
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 
 	zeroAngleOffset=getCurrentLocation();
 
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 }
 
 void StepperCtrl::encoderDiagnostics(char *ptrStr)
 {
-	bool state=TC5_ISR_Enabled;
-	disableTCInterrupts();
+bool state=_tc.enterCritical();;
 
 	encoder.diagnostics(ptrStr);
 
-	if (state) enableTCInterrupts();
+_tc.exitCritical(state);;
 }
 
 
@@ -309,13 +247,13 @@ float StepperCtrl::measureStepSize(void)
 	LOG("move");
 	for (i=0; i<4; i++)
 	{
-		stepperDriver.move(A4954_NUM_MICROSTEPS/4,motorParams.currentMa); //move one half step 'forward'
+		stepperDriver.move(DRV8434_NUM_MICROSTEPS/4,motorParams.currentMa); //move one half step 'forward'
 		delay_ms(50);
-		stepperDriver.move(A4954_NUM_MICROSTEPS/2,motorParams.currentMa); //move one half step 'forward'
+		stepperDriver.move(DRV8434_NUM_MICROSTEPS/2,motorParams.currentMa); //move one half step 'forward'
 		delay_ms(50);
-		stepperDriver.move(3*A4954_NUM_MICROSTEPS/4,motorParams.currentMa); //move one half step 'forward'
+		stepperDriver.move(3*DRV8434_NUM_MICROSTEPS/4,motorParams.currentMa); //move one half step 'forward'
 		delay_ms(50);
-		stepperDriver.move(A4954_NUM_MICROSTEPS,motorParams.currentMa); //move one half step 'forward'
+		stepperDriver.move(DRV8434_NUM_MICROSTEPS,motorParams.currentMa); //move one half step 'forward'
 		delay_ms(50);
 	}
 	LOG("sample encoder");
@@ -352,9 +290,9 @@ float StepperCtrl::measureStepSize(void)
 	//move back
 	for (i=0; i<4; i++)
 	{
-		stepperDriver.move(-A4954_NUM_MICROSTEPS/2,motorParams.currentMa); //move one half step 'forward'
+		stepperDriver.move(-DRV8434_NUM_MICROSTEPS/2,motorParams.currentMa); //move one half step 'forward'
 		delay_ms(100);
-		stepperDriver.move(-A4954_NUM_MICROSTEPS,motorParams.currentMa); //move one half step 'forward'
+		stepperDriver.move(-DRV8434_NUM_MICROSTEPS,motorParams.currentMa); //move one half step 'forward'
 		delay_ms(100);
 	}
 	systemParams.microsteps=microsteps;
@@ -393,8 +331,7 @@ Angle StepperCtrl::maxCalibrationError(void)
 	bool feedback=enableFeedback;
 	uint16_t microSteps=systemParams.microsteps;
 	int32_t steps;
-	bool state=TC5_ISR_Enabled;
-	disableTCInterrupts();
+	bool state=_tc.enterCritical();
 
 
 	if (false == calTable.calValid())
@@ -434,11 +371,11 @@ Angle StepperCtrl::maxCalibrationError(void)
 		updateStep(0,1);
 
 		// move one half step at a time, a full step move could cause a move backwards depending on how current ramps down
-		steps+=A4954_NUM_MICROSTEPS/2;
+		steps+=DRV8434_NUM_MICROSTEPS/2;
 		stepperDriver.move(steps,motorParams.currentMa);
 
 		delay_ms(50);
-		steps+=A4954_NUM_MICROSTEPS/2;
+		steps+=DRV8434_NUM_MICROSTEPS/2;
 		stepperDriver.move(steps,motorParams.currentMa);
 
 
@@ -447,11 +384,11 @@ Angle StepperCtrl::maxCalibrationError(void)
 			delay_ms(100);
 			updateStep(0,1);
 			// move one half step at a time, a full step move could cause a move backwards depending on how current ramps down
-			steps+=A4954_NUM_MICROSTEPS/2;
+			steps+=DRV8434_NUM_MICROSTEPS/2;
 			stepperDriver.move(steps,motorParams.currentMa);
 
 			delay_ms(100);
-			steps+=A4954_NUM_MICROSTEPS/2;
+			steps+=DRV8434_NUM_MICROSTEPS/2;
 			stepperDriver.move(steps,motorParams.currentMa);
 		}
 		//delay(400);
@@ -472,19 +409,17 @@ Angle StepperCtrl::maxCalibrationError(void)
 	systemParams.microsteps=microSteps;
 	motorReset();
 	enableFeedback=feedback;
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
 	LOG("max error is %d cnts", maxError);
 	return Angle((uint16_t)maxError);
 }
 
 bool StepperCtrl::uncalMove(int32_t steps)
 {
-	bool state=TC5_ISR_Enabled;
+	bool state=_tc.enterCritical();
 	int dir=0;
 	int32_t i;
 	int32_t s=0;
-
-	disableTCInterrupts();
 
 	if (steps<0)
 	{
@@ -503,10 +438,10 @@ bool StepperCtrl::uncalMove(int32_t steps)
 		{
 			if (dir==0)
 			{
-				s+=A4954_NUM_MICROSTEPS/2;
+				s+=DRV8434_NUM_MICROSTEPS/2;
 			}else
 			{
-				s-=A4954_NUM_MICROSTEPS/2;
+				s-=DRV8434_NUM_MICROSTEPS/2;
 			}
 			stepperDriver.move(s,motorParams.currentMa);
 
@@ -514,12 +449,13 @@ bool StepperCtrl::uncalMove(int32_t steps)
 		}
 	}
 
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
 	return true;
 }
 
 
-bool StepperCtrl::home(int dir)
+//this move motor until it stalls out as homing for s
+bool StepperCtrl::home_to_stall(int dir)
 {
 	uint32_t ms=millis();
 	int32_t steps;
@@ -531,9 +467,7 @@ bool StepperCtrl::home(int dir)
 	bool feedback=enableFeedback;
 	enableFeedback=false;
 
-	bool state=TC5_ISR_Enabled;
-	disableTCInterrupts();
-
+	bool state=_tc.enterCritical();
 	steps=0;
 	lastMean=sampleMeanEncoder(100);
 	while (!done)
@@ -545,10 +479,10 @@ bool StepperCtrl::home(int dir)
 			{
 				if (dir)
 				{
-					steps+=A4954_NUM_MICROSTEPS/2;
+					steps+=DRV8434_NUM_MICROSTEPS/2;
 				}else
 				{
-					steps-=A4954_NUM_MICROSTEPS/2;
+					steps-=DRV8434_NUM_MICROSTEPS/2;
 				}
 				stepperDriver.move(steps,motorParams.homeMa);
 				delay_ms(2);
@@ -575,7 +509,7 @@ bool StepperCtrl::home(int dir)
 			setAngle(0);
 			//we have stalled as such
 			enableFeedback=feedback;
-			if (state) enableTCInterrupts();
+			_tc.exitCritical(state);
 			moveToAbsAngle(ANGLE_FROM_DEGREES(10));
 			return true;
 		}
@@ -583,15 +517,15 @@ bool StepperCtrl::home(int dir)
 
 		if ((millis()-ms)>12000)
 		{
-			ERROR("took more than 120 seconds to home");
+			ERROR("took more than 120 seconds to home_to_stall");
 			enableFeedback=feedback;
-			if (state) enableTCInterrupts();
+			_tc.exitCritical(state);
 			return false;
 		}
 	}
 
 	enableFeedback=feedback;
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
 	return false;
 }
 
@@ -613,9 +547,8 @@ bool StepperCtrl::calibrateEncoder(void)
 	int32_t lastMean;
 	uint16_t microSteps=systemParams.microsteps;
 	bool feedback=enableFeedback;
-	bool state=TC5_ISR_Enabled;
+	bool state=_tc.enterCritical();
 
-	disableTCInterrupts();
 
 	enableFeedback=false;
 	systemParams.microsteps=1;
@@ -637,6 +570,7 @@ bool StepperCtrl::calibrateEncoder(void)
 		delay_ms(100);
 		mean=sampleMeanEncoder(200);
 
+		wdtClear();
 		LOG("Previous cal distance %d, %d, mean %d, cal %d",j, cal-Angle((uint16_t)mean), mean, (uint16_t)cal);
 
 
@@ -654,7 +588,7 @@ bool StepperCtrl::calibrateEncoder(void)
 			{
 				ERROR("no change in angle");
 				enableFeedback=feedback;
-				if (state) enableTCInterrupts();
+				_tc.exitCritical(state);
 				return false;
 			}
 		}
@@ -670,14 +604,14 @@ bool StepperCtrl::calibrateEncoder(void)
 		// move one half step at a time, a full step move could cause a move backwards depending on how current ramps down
 		for (ii=0; ii<N; ii++)
 		{
-			steps+=A4954_NUM_MICROSTEPS/N;
+			steps+=DRV8434_NUM_MICROSTEPS/N;
 			stepperDriver.move(steps,motorParams.currentMa);
 			//delay_ms(25);
 		}
 		stepperDriver.move(steps,motorParams.currentMa);
 		//delay_ms(50);
 
-		//steps+=A4954_NUM_MICROSTEPS/2;
+		//steps+=DRV8434_NUM_MICROSTEPS/2;
 		//stepperDriver.move(steps,motorParams.currentMa);
 
 
@@ -687,11 +621,11 @@ bool StepperCtrl::calibrateEncoder(void)
 			delay_ms(100);
 			updateStep(0,1);
 			// move one half step at a time, a full step move could cause a move backwards depending on how current ramps down
-			steps+=A4954_NUM_MICROSTEPS/2;
+			steps+=DRV8434_NUM_MICROSTEPS/2;
 			stepperDriver.move(steps,motorParams.currentMa);
 
 			delay_ms(100);
-			steps+=A4954_NUM_MICROSTEPS/2;
+			steps+=DRV8434_NUM_MICROSTEPS/2;
 			stepperDriver.move(steps,motorParams.currentMa);
 
 		}
@@ -713,7 +647,7 @@ bool StepperCtrl::calibrateEncoder(void)
 	systemParams.microsteps=microSteps;
 	motorReset();
 	enableFeedback=feedback;
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
 	return done;
 }
 
@@ -733,13 +667,13 @@ stepCtrlError_t StepperCtrl::begin(void)
 
 	//we have to update from NVM before moving motor
 	updateParamsFromNVM(); //update the local cache from the NVM
-	WDTKick();
+	wdtClear();
 	LOG("start up encoder");
 	if (false == encoder.begin(PIN_AS5047D_CS))
 	{
 		return STEPCTRL_NO_ENCODER;
 	}
-	WDTKick();
+	wdtClear();
 	LOG("cal table init");
 	calTable.init();
 
@@ -762,9 +696,9 @@ stepCtrlError_t StepperCtrl::begin(void)
 		//			ERROR("Motor may not have power");
 		//			return STEPCTRL_NO_POWER;
 		//		}
-		bool state=enterCriticalSection();
+		bool state=_tc.enterCritical();
 		setLocationFromEncoder(); //measure new starting point
-		exitCriticalSection(state);
+		_tc.exitCritical(state);
 		MotorParams_t params;
 		memcpy((void *)&params, (void *)&motorParams,sizeof(motorParams));
 		nvmWriteMotorParms(params);
@@ -817,8 +751,7 @@ stepCtrlError_t StepperCtrl::begin(void)
 		}
 		if (abs(x)<=1.2)
 		{
-#warning "200 steps only"
-			motorParams.fullStepsPerRotation=200;
+			motorParams.fullStepsPerRotation=400;
 		}else
 		{
 			motorParams.fullStepsPerRotation=200;
@@ -847,8 +780,8 @@ stepCtrlError_t StepperCtrl::begin(void)
 
 
 	enableFeedback=true;
-	setupTCInterrupts();
-	enableTCInterrupts();
+	_tc.setup(NZS_TIMER,GENERIC_CLOCK_GENERATOR_48M,GCLK_freq[GENERIC_CLOCK_GENERATOR_48M],TC_PRESCALER_DIV8);
+	_tc.init_periodic(isr_timer,NZS_CONTROL_LOOP_HZ);
 	return STEPCTRL_NO_ERROR;
 
 }
@@ -927,34 +860,32 @@ Angle StepperCtrl::sampleMeanEncoder(int32_t numSamples)
 		mean=mean+(x);
 	}
 
-	LOG("min %d, max %d, mean %d", min, max, (int32_t)(mean/numSamples));
+	//LOG("min %d, max %d, mean %d", min, max, (int32_t)(mean/numSamples));
 	return Angle(mean/numSamples);
 }
 
 void StepperCtrl::feedback(bool enable)
 {
-	disableTCInterrupts();
+	_tc.stop();
 	motorReset();
 	enableFeedback=enable;
 	if (enable == true)
 	{
-		enableTCInterrupts();
+		_tc.start();
 	}
 }
 
 
 void StepperCtrl::updateSteps(int64_t steps)
 {
-	bool state=TC5_ISR_Enabled;
-	disableTCInterrupts();
+	bool state=_tc.enterCritical();
 	numSteps+=steps;
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
 }
 
 void StepperCtrl::updateStep(int dir, uint16_t steps)
 {
-	bool state=TC5_ISR_Enabled;
-	disableTCInterrupts();
+	bool state=_tc.enterCritical();
 	if (dir)
 	{
 		numSteps-=steps;
@@ -962,14 +893,13 @@ void StepperCtrl::updateStep(int dir, uint16_t steps)
 	{
 		numSteps+=steps;
 	}
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
 }
 
 void StepperCtrl::requestStep(int dir, uint16_t steps)
 {
 	bool state;
-	state=TC5_ISR_Enabled;
-	disableTCInterrupts();
+	state=_tc.enterCritical();
 
 	if (dir)
 	{
@@ -983,7 +913,7 @@ void StepperCtrl::requestStep(int dir, uint16_t steps)
 	{
 		moveToAngle(getDesiredLocation(),motorParams.currentMa);
 	}
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
 }
 
 
@@ -999,8 +929,8 @@ void StepperCtrl::move(int dir, uint16_t steps)
 	if (false == enableFeedback)
 	{
 		n=systemParams.microsteps;
-		ret=((int64_t)numSteps * A4954_NUM_MICROSTEPS+(n/2))/n;
-		n=A4954_NUM_MICROSTEPS*motorParams.fullStepsPerRotation;
+		ret=((int64_t)numSteps * DRV8434_NUM_MICROSTEPS+(n/2))/n;
+		n=DRV8434_NUM_MICROSTEPS*motorParams.fullStepsPerRotation;
 		while(ret>n)
 		{
 			ret-=n;
@@ -1023,11 +953,11 @@ int64_t StepperCtrl::getDesiredLocation(void)
 {
 	int64_t ret;
 	int32_t n;
-	bool state=TC5_ISR_Enabled;
-	disableTCInterrupts();
+	bool state=_tc.enterCritical();
+
 	n=motorParams.fullStepsPerRotation * systemParams.microsteps;
 	ret=((int64_t)numSteps * (int64_t)ANGLE_STEPS+(n/2))/n ;
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
 	return ret;
 }
 
@@ -1035,9 +965,9 @@ int64_t StepperCtrl::getDesiredLocation(void)
 //int32_t StepperCtrl::getSteps(void)
 //{
 //	int32_t ret;
-//	bool state=enterCriticalSection();
+//	bool state=_tc.enterCritical();
 //	ret=numSteps;
-//	exitCriticalSection(state);
+//	_tc.exitCritical(state);
 //	return ret;
 //}
 
@@ -1051,9 +981,9 @@ void StepperCtrl::moveToAbsAngle(int32_t a)
 	n=motorParams.fullStepsPerRotation * systemParams.microsteps;
 
 	ret=(((int64_t)a+zeroAngleOffset)*n+ANGLE_STEPS/2)/(int32_t)ANGLE_STEPS;
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 	numSteps=ret;
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 }
 
 void StepperCtrl::moveToAngle(int32_t a, uint32_t ma)
@@ -1062,7 +992,7 @@ void StepperCtrl::moveToAngle(int32_t a, uint32_t ma)
 	a=a % ANGLE_STEPS;  //we only interested in the current angle
 
 
-	a=DIVIDE_WITH_ROUND( (a*motorParams.fullStepsPerRotation*A4954_NUM_MICROSTEPS), ANGLE_STEPS);
+	a=DIVIDE_WITH_ROUND( (a*motorParams.fullStepsPerRotation*DRV8434_NUM_MICROSTEPS), ANGLE_STEPS);
 
 	//LOG("move %d %d",a,ma);
 	stepperDriver.move(a,ma);
@@ -1072,9 +1002,9 @@ void StepperCtrl::moveToAngle(int32_t a, uint32_t ma)
 Angle StepperCtrl::getEncoderAngle(void)
 {
 	Angle a;
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 	a=calTable.fastReverseLookup(sampleAngle());
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 	return a;
 }
 
@@ -1082,8 +1012,8 @@ int64_t StepperCtrl::getCurrentLocation(void)
 {
 	Angle a;
 	int32_t x;
-	bool state=TC5_ISR_Enabled;
-	disableTCInterrupts();
+	bool state=_tc.enterCritical();
+
 	a=calTable.fastReverseLookup(sampleAngle());
 	x=(int32_t)a - (int32_t)((currentLocation) & ANGLE_MAX);
 
@@ -1096,7 +1026,7 @@ int64_t StepperCtrl::getCurrentLocation(void)
 		currentLocation += ANGLE_STEPS;
 	}
 	currentLocation=(currentLocation & 0xFFFFFFFFFFFF0000UL) | (uint16_t)a;
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
 	return currentLocation;
 
 }
@@ -1120,29 +1050,29 @@ int64_t StepperCtrl::getDesiredAngle(void)
 
 void StepperCtrl::setVelocity(int64_t vel)
 {
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 
 	velocity=vel;
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 }
 
 int64_t StepperCtrl::getVelocity(void)
 {
 	int64_t vel;
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 
 	vel=velocity;
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 	return vel;
 }
 
 void StepperCtrl::PrintData(void)
 {
 	char s[128];
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 	LOG("%u,%u,%u", (uint32_t)numSteps,(uint32_t)getDesiredAngle(),(uint32_t)getCurrentAngle());
 	//SerialUSB.println(s);
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 }
 //this is the velocity PID feedback loop
 bool StepperCtrl::vpidFeedback(int64_t desiredLoc, int64_t currentLoc, Control_t *ptrCtrl)
@@ -1626,8 +1556,7 @@ bool StepperCtrl::simpleFeedback(int64_t desiredLoc, int64_t currentLoc, Control
 
 void StepperCtrl::enable(bool enable)
 {
-	bool state=TC5_ISR_Enabled;
-	disableTCInterrupts();
+	bool state=_tc.enterCritical();
 	bool feedback=enableFeedback;
 
 	stepperDriver.enable(enable); //enable or disable the stepper driver as needed
@@ -1645,7 +1574,7 @@ void StepperCtrl::enable(bool enable)
 
 	enabled=enable;
 	enableFeedback=feedback;
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
 }
 
 /*
@@ -1663,7 +1592,7 @@ void StepperCtrl::testRinging(void)
 	{
 		SerialUSB.print("Current ");
 		SerialUSB.println(c);
-		steps+=A4954_NUM_MICROSTEPS;
+		steps+=DRV8434_NUM_MICROSTEPS;
 		stepperDriver.move(steps,NVM->SystemParams.currentMa);
 		currentLimit=false;
 		measure();
@@ -1677,13 +1606,13 @@ void StepperCtrl::testRinging(void)
 //returns -1 if no data, else returns number of data points remaining.
 int32_t StepperCtrl::getLocation(Location_t *ptrLoc)
 {
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 	int32_t n;
 	//check for empty
 	if (locReadIndx==locWriteIndx)
 	{
 		//empty data
-		exitCriticalSection(state);
+		_tc.exitCritical(state);
 		return -1;
 	}
 
@@ -1697,13 +1626,13 @@ int32_t StepperCtrl::getLocation(Location_t *ptrLoc)
 	n=((locWriteIndx+MAX_NUM_LOCATIONS)-locReadIndx)%MAX_NUM_LOCATIONS;
 
 
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 	return n;
 }
 
 void StepperCtrl::updateLocTable(int64_t desiredLoc, int64_t currentLoc, Control_t *ptrCtrl)
 {
-	bool state=enterCriticalSection();
+	bool state=_tc.enterCritical();
 	int32_t next;
 
 	// set the next write location
@@ -1712,7 +1641,7 @@ void StepperCtrl::updateLocTable(int64_t desiredLoc, int64_t currentLoc, Control
 	if (next==locReadIndx)
 	{
 		//we are full, exit
-		exitCriticalSection(state);
+		_tc.exitCritical(state);
 		//RED_LED(true); //turn Red LED on to indciate buffer full
 		return;
 	}
@@ -1726,7 +1655,7 @@ void StepperCtrl::updateLocTable(int64_t desiredLoc, int64_t currentLoc, Control
 	locWriteIndx=next;
 
 
-	exitCriticalSection(state);
+	_tc.exitCritical(state);
 }
 
 
@@ -1833,8 +1762,8 @@ void StepperCtrl::PID_Autotune(void)
 	feedbackCtrl_t prevCtrl=systemParams.controllerMode;
 
 	//disable interrupts and feedback controller
-	bool state=TC5_ISR_Enabled;
-	disableTCInterrupts();
+	bool state=_tc.enterCritical();
+
 	systemParams.controllerMode=CTRL_POS_PID;
 	enableFeedback=false;
 	motorReset();
@@ -1936,9 +1865,9 @@ void StepperCtrl::PID_Autotune(void)
 		}
 		reset=0;
 
-		stepperDriver.move(A4954_NUM_MICROSTEPS,force);
+		stepperDriver.move(DRV8434_NUM_MICROSTEPS,force);
 		//moveToAngle(startAngle+(ANGLE_STEPS/motorParams.fullStepsPerRotation),force);
-		//stepperDriver.move(A4954_NUM_MICROSTEPS,NVM->SystemParams.currentMa);
+		//stepperDriver.move(DRV8434_NUM_MICROSTEPS,NVM->SystemParams.currentMa);
 		t0=micros();
 
 		error=0;
@@ -2006,7 +1935,8 @@ void StepperCtrl::PID_Autotune(void)
 	systemParams.controllerMode=prevCtrl;
 	systemParams.microsteps=microSteps;
 	enableFeedback=feedback;
-	if (state) enableTCInterrupts();
+	_tc.exitCritical(state);
+
 
 }
 

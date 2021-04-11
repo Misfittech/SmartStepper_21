@@ -40,7 +40,7 @@
 #include "nonvolatile.h"
 #include "board.h" //for divide with rounding macro
 #include "utils.h"
-
+#include "drivers/wdt/wdt.h"
 
 static uint16_t getTableIndex(uint16_t value)
 {
@@ -114,7 +114,7 @@ Angle CalibrationTable::fastReverseLookup(Angle encoderAngle)
 		return reverseLookup(encoderAngle);
 	}
 #else
-	return reverseLookup(encoderAngle)
+	return reverseLookup(encoderAngle);
 #endif
 }
 
@@ -355,12 +355,12 @@ void CalibrationTable::createFastCal(void)
 	int32_t j;
 	j=0;
 	cs=0;
-	WDTKick();
+	wdtClear();
 	LOG("setting fast calibration");
 	for (i=0; i<16384; i++)
 	{
 
-		WDTKick();
+		wdtClear();
 		uint16_t x;
 		x=reverseLookup(i*4);
 		data[j]=x;

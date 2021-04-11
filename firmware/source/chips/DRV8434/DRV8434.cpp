@@ -35,12 +35,12 @@
     please support MisfitTech and open-source hardware by purchasing
 	products from MisfitTech, www.misifittech.net!
  *********************************************************************/
-#include "A4954.h"
+#include "DRV8434.h"
 #include "board.h"
 #include "drivers/pin/pin.h"
 #include "libraries/syslog/syslog.h"
-#include "angle.h"
-#include "sine.h"
+#include "app/angle.h"
+#include "libraries/sine/sine.h"
 
 static uint8_t pinState=0;
 
@@ -50,220 +50,115 @@ static uint8_t pinState=0;
 
 
 
-#define DAC_MAX (0x01FFL)
-// Wait for synchronization of registers between the clock domains
-static __inline__ void syncTCC(Tcc* TCCx) __attribute__((always_inline, unused));
-static void syncTCC(Tcc* TCCx) {
-	int32_t t0=1000;
-	while (TCCx->SYNCBUSY.reg & TCC_SYNCBUSY_MASK)
-	{
-		t0--;
-		if (t0==0)
-		{
-			break;
-			ERROR("TCC time out");
-		}
-		delay_us(1);
-	}
-}
+#define DAC_MAX (0x00FFL)
+
 
 
 static inline void bridge1(int state)
 {
 	//PinConfig(PIN_IN3);
 	//PinConfig(PIN_IN4);
-	PinSetAsOutput(PIN_IN1);
-	PinSetAsOutput(PIN_IN2);
+	PinSetAsOutput(PIN_DVR_IN1);
+	PinSetAsOutput(PIN_DVR_IN2);
 	if (state==0)
 	{
-		PinHigh(PIN_IN1);
-		PinLow(PIN_IN2);
+		PinHigh(PIN_DVR_IN1);
+		PinLow(PIN_DVR_IN2);
 		pinState=(pinState & 0x0C) | 0x1;
 	}
 	if (state==1)
 	{
-		PinLow(PIN_IN1);
-		PinHigh(PIN_IN2);
+		PinLow(PIN_DVR_IN1);
+		PinHigh(PIN_DVR_IN2);
 		pinState=(pinState & 0x0C) | 0x2;
 	}
 	if (state==3)
 	{
-		PinLow(PIN_IN1);
-		PinLow(PIN_IN2);
+		PinLow(PIN_DVR_IN1);
+		PinLow(PIN_DVR_IN2);
 	}
 }
 
 static inline void bridge2(int state)
 {
-	PinSetAsOutput(PIN_IN3);
-	PinSetAsOutput(PIN_IN4);
+	PinSetAsOutput(PIN_DVR_IN3);
+	PinSetAsOutput(PIN_DVR_IN4);
 	//PinConfig(PIN_IN1);
 	//PinConfig(PIN_IN2);
 	if (state==0)
 	{
 
-		PinHigh(PIN_IN3);
-		PinLow(PIN_IN4);
+		PinHigh(PIN_DVR_IN3);
+		PinLow(PIN_DVR_IN4);
 		pinState=(pinState & 0x03) | 0x4;
 	}
 	if (state==1)
 	{
-		PinLow(PIN_IN3);
-		PinHigh(PIN_IN4);
+		PinLow(PIN_DVR_IN3);
+		PinHigh(PIN_DVR_IN4);
 		pinState=(pinState & 0x03) | 0x8;
 	}
 	if (state==3)
 	{
-		PinLow(PIN_IN3);
-		PinLow(PIN_IN4);;
+		PinLow(PIN_DVR_IN3);
+		PinLow(PIN_DVR_IN4);;
 	}
 }
 
-static void enableTCC0(uint8_t percent)
+void DRV8434::setDAC(uint32_t DAC1, uint32_t DAC2)
 {
-#ifdef MECHADUINO_HARDWARE
-	return;
-#else
-	Tcc* TCCx = TCC0 ;
-
-
-	PinConfig(PIN_IN1);
-	PinConfig(PIN_IN2);
-	PinConfig(PIN_IN3);
-	PinConfig(PIN_IN4);
-
-	uint32_t ulValue=((uint32_t)(100-percent)*480)/100;
-	//ERROR("Enable TCC0");
-
-	PM->APBCMASK.bit.TCC0_=1;
-
-	GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID( GCLK_CLKCTRL_ID_TCC0_TCC1_Val )) ;
-
-	while ( GCLK->STATUS.bit.SYNCBUSY == 1 ) ;
-
-	//ERROR("Setting TCC %d %d",ulValue,ulPin);
-	TCCx->CTRLA.reg &= ~TCC_CTRLA_ENABLE;
-	syncTCC(TCCx);
-
-	// Set TCx as normal PWM
-	TCCx->WAVE.reg |= TCC_WAVE_WAVEGEN_NPWM;
-	syncTCC(TCCx);
-
-	// Set TCx in waveform mode Normal PWM
-	TCCx->CC[1].reg = (uint32_t)ulValue; //ch5 //IN3
-	syncTCC(TCCx);
-
-	TCCx->CC[2].reg = (uint32_t)ulValue; //ch6 //IN4
-	syncTCC(TCCx);
-
-	TCCx->CC[3].reg = (uint32_t)ulValue; //ch7  //IN2
-	syncTCC(TCCx);
-
-	TCCx->CC[1].reg = (uint32_t)ulValue; //ch1 == ch5 //IN1
-
-	syncTCC(TCCx);
-
-	// Set PER to maximum counter value (resolution : 0xFF)
-	TCCx->PER.reg = DAC_MAX;
-	syncTCC(TCCx);
-
-	// Enable TCCx
-	TCCx->CTRLA.reg |= TCC_CTRLA_ENABLE ;
-	syncTCC(TCCx);
-	//ERROR("Enable TCC0 DONE");
-#endif
+	DAC1=MIN(DAC1, 255);
+	DAC2=MIN(DAC2, 255);
+	_tc.pwm(PIN_DVR_VREFA,(uint8_t)DAC1);
+	_tc.pwm(PIN_DVR_VREFB,(uint8_t)DAC2);
+//	TCC1->CC[1].reg = (uint32_t)DAC1; //D9 PA07 - VREF12
+//	syncTCC(TCC1);
+//	TCC1->CC[0].reg = (uint32_t)DAC2; //D4 - VREF34
+//	syncTCC(TCC1);
 }
 
-static void setDAC(uint32_t DAC1, uint32_t DAC2)
+void DRV8434::setupDAC(void)
 {
-	TCC1->CC[1].reg = (uint32_t)DAC1; //D9 PA07 - VREF12
-	syncTCC(TCC1);
-	TCC1->CC[0].reg = (uint32_t)DAC2; //D4 - VREF34
-	syncTCC(TCC1);
-}
-
-static void setupDAC(void)
-{
-	Tcc* TCCx = TCC1 ;
-
-
-	PinConfig(PIN_A4954_VREF34);
-	PinConfig(PIN_A4954_VREF12);
-//	pinPeripheral(PIN_A4954_VREF34, PIO_TIMER_ALT);
-//	pinPeripheral(PIN_A4954_VREF12, PIO_TIMER);
-
-	PM->APBCMASK.bit.TCC1_=1;
-
-	GCLK->CLKCTRL.reg = (uint16_t) (GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_ID_TCC0_TCC1) ;
-
-	while ( GCLK->STATUS.bit.SYNCBUSY == 1 ) ;
-
-	TCCx->CTRLA.reg=TCC_CTRLA_SWRST;
-	syncTCC(TCCx);
-
-//	//ERROR("Setting TCC %d %d",ulValue,ulPin);
-//	TCCx->CTRLA.reg &= ~TCC_CTRLA_ENABLE;
-//	syncTCC(TCCx);
-
-	// Set TCx as normal PWM
-	TCCx->WAVE.reg |= TCC_WAVE_WAVEGEN_NPWM;
-	syncTCC(TCCx);
-
-	// Set TCx in waveform mode Normal PWM
-	TCCx->CC[1].reg = (uint32_t)0;
-	syncTCC(TCCx);
-
-	TCCx->CC[0].reg = (uint32_t)0;
-	syncTCC(TCCx);
-
-	// Set PER to maximum counter value (resolution : 0xFFF = 12 bits)
-	// =48e6/2^12=11kHz frequency
-	TCCx->PER.reg = DAC_MAX;
-	syncTCC(TCCx);
-
-	// Enable TCCx
-	TCCx->CTRLA.reg |= TCC_CTRLA_ENABLE ;
-	syncTCC(TCCx);
+	_tc.setup((Tc *)PIN_DVR_VREFA.ptrPerherial,GENERIC_CLOCK_GENERATOR_100M,GCLK_freq[GENERIC_CLOCK_GENERATOR_100M],TC_PRESCALER_DIV4);
+	_tc.init_8bit_pwm();
+	PinConfig(PIN_DVR_VREFB);
+	PinConfig(PIN_DVR_VREFA);
+	_tc.pwm(PIN_DVR_VREFA,0);
+	_tc.pwm(PIN_DVR_VREFB,0);
 
 }
 
 
-void A4954::begin()
+void DRV8434::begin()
 {
-	//setup the A4954 pins
-	PinLow(PIN_IN1);
-	PinLow(PIN_IN2);
-	PinLow(PIN_IN3);
-	PinLow(PIN_IN4);
-	PinConfig(PIN_IN1);
-	PinConfig(PIN_IN2);
-	PinConfig(PIN_IN3);
-	PinConfig(PIN_IN4);
+	//setup the DRV8434 pins
+	PinLow(PIN_DVR_IN1);
+	PinLow(PIN_DVR_IN2);
+	PinLow(PIN_DVR_IN3);
+	PinLow(PIN_DVR_IN4);
+	PinConfig(PIN_DVR_IN1);
+	PinConfig(PIN_DVR_IN2);
+	PinConfig(PIN_DVR_IN3);
+	PinConfig(PIN_DVR_IN4);
+	
+	PinConfig(PIN_DVR_SLEEP);
+	PinConfig(PIN_DVR_BDECAY);
+	PinConfig(PIN_DVR_ADECAY);
+	PinConfig(PIN_DVR_TOFF);
+	PinConfig(PIN_DVR_FAULT);
 
-//	//digitalWrite(PIN_A4954_IN3,LOW);
-//	//pinMode(PIN_A4954_IN3,OUTPUT);
-//	//digitalWrite(PIN_A4954_IN4,LOW);
-//	//pinMode(PIN_A4954_IN4,OUTPUT);
-//	digitalWrite(PIN_A4954_IN2,LOW);
-//	pinMode(PIN_A4954_IN2,OUTPUT);
-//	digitalWrite(PIN_A4954_IN1,LOW);
-//	pinMode(PIN_A4954_IN1,OUTPUT);
+	
+	
+	PinLow(PIN_DVR_VREFA);
+	PinLow(PIN_DVR_VREFB);
+	PinConfig(PIN_DVR_VREFA);
+	PinConfig(PIN_DVR_VREFB);
 
-	//setup the PWM for current on the A4954, set for low current
-	PinLow(PIN_A4954_VREF12);
-	PinLow(PIN_A4954_VREF34);
-	PinConfig(PIN_A4954_VREF12);
-	PinConfig(PIN_A4954_VREF34);
-//	digitalWrite(PIN_A4954_VREF12,LOW);
-//	digitalWrite(PIN_A4954_VREF34,LOW);
-//	pinMode(PIN_A4954_VREF34, OUTPUT);
-//	pinMode(PIN_A4954_VREF12, OUTPUT);
 
 	enabled=true;
 	lastStepMicros=0;
 	forwardRotation=true;
 
-	enableTCC0(90);
 	setupDAC();
 	//
 	//	int i=0;
@@ -293,41 +188,43 @@ void A4954::begin()
 	//	{
 	//
 	//	}
+	
+	PinHigh(PIN_DVR_SLEEP);
 	return;
 }
 
-void A4954::limitCurrent(uint8_t percent)
+void DRV8434::limitCurrent(uint8_t percent)
 {
 #ifdef MECHADUINO_HARDWARE
 	return;
 #else
 	//WARNING("current limit %d",percent);
-	enableTCC0(percent);
+	//enableTCC0(percent);
 	if (pinState & 0x01)
 	{
-		PinConfig(PIN_IN2);
+		PinConfig(PIN_DVR_IN2);
 		//pinPeripheral(PIN_A4954_IN2, PIO_TIMER_ALT); //TCC0 WO[7]
 	}
 	if (pinState & 0x02)
 	{
-		PinConfig(PIN_IN1);
+		PinConfig(PIN_DVR_IN1);
 		//pinPeripheral(PIN_A4954_IN1, PIO_TIMER); //TCC0 WO[1]
 	}
 	if (pinState & 0x04)
 	{
-		PinConfig(PIN_IN4);
+		PinConfig(PIN_DVR_IN4);
 		//pinPeripheral(PIN_A4954_IN4, PIO_TIMER_ALT);
 	}
 	if (pinState & 0x08)
 	{
-		PinConfig(PIN_IN3);
+		PinConfig(PIN_DVR_IN3);
 		//pinPeripheral(PIN_A4954_IN3, PIO_TIMER_ALT);
 	}
 #endif
 }
 
 
-void A4954::enable(bool enable)
+void DRV8434::enable(bool enable)
 {
 	enabled=enable;
 	if (enabled == false)
@@ -348,12 +245,14 @@ void A4954::enable(bool enable)
 // A4954_NUM_MICROSTEPS is 256 by default so stepAngle of 1024 is 360 degrees
 // Note you can only move up to +/-A4954_NUM_MICROSTEPS from where you
 // currently are.
-int32_t A4954::move(int32_t stepAngle, uint32_t mA)
+int32_t DRV8434::move(int32_t stepAngle, uint32_t mA)
 {
 	uint16_t angle;
 	int32_t cos,sin;
 	int32_t dacSin,dacCos;
 	//static int i=0;
+	
+	mA=MIN(DRV8434_MAX_MA, mA);
 
 	if (enabled == false)
 	{
@@ -400,9 +299,9 @@ int32_t A4954::move(int32_t stepAngle, uint32_t mA)
 	//	}
 
 	//convert value into DAC scaled to 1000mA max
-	dacCos=(int32_t)((int64_t)dacCos*(DAC_MAX))/1000;
+	dacCos=(int32_t)((int64_t)dacCos*(DAC_MAX))/DRV8434_MAX_MA;
 	//convert value into DAC scaled to 1000mA max
-	dacSin=(int32_t)((int64_t)dacSin*(DAC_MAX))/1000;
+	dacSin=(int32_t)((int64_t)dacSin*(DAC_MAX))/DRV8434_MAX_MA;
 
 	//LOG("DACs %d %d",dacSin, dacCos);
 	setDAC(dacSin,dacCos);

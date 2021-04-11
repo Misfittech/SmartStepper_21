@@ -43,14 +43,17 @@
 
 //since we will write the following structure into each page, we need to find our latest page
 // to do this we will use the header to contain a checksum and write counter.
-#define EEPROM_SIZE (FLASH_ROW_SIZE*2)
+#define EEPROM_SIZE (FLASH_ERASE_SIZE*2)
+
+
 
 typedef struct {
       uint16_t checksum;
       uint16_t count;
 }eepromHeader_t;
 
-#define EEPROM_DATA_SIZE (FLASH_PAGE_SIZE_D21-sizeof(eepromHeader_t))
+#define EEPROM_DATA_SIZE (FLASH_PAGE_SIZE-sizeof(eepromHeader_t))
+
 typedef struct {
       eepromHeader_t header;
       uint8_t data[EEPROM_DATA_SIZE];
@@ -63,7 +66,7 @@ static eepromData_t EEPROMCache;
 static int32_t NextPageWrite=-1;
 
 //we need to reserve two pages for EEPROM
-__attribute__((__aligned__(FLASH_ROW_SIZE)))  __attribute__ ((section (".flash" ))) uint8_t NVM_eeprom[EEPROM_SIZE]={0};
+__attribute__((__aligned__(FLASH_ERASE_SIZE)))  __attribute__ ((section (".flash" ))) uint8_t NVM_eeprom[EEPROM_SIZE]={0};
 
 
 static uint16_t checksum(uint8_t *ptrData, uint32_t nBytes)
@@ -143,7 +146,7 @@ static uint32_t findLastGoodPage(void)
 	    }
 	 }
       }
-      page=page + FLASH_PAGE_SIZE_D21;
+      page=page + FLASH_PAGE_SIZE;
    }
    //LOG("last good page %d",lastGoodPage);
    return lastGoodPage;
@@ -175,7 +178,7 @@ static uint32_t eepromGetNextWritPage(void)
 	 //verify page is erased
 	 ptrData= (uint8_t *)&NVM_eeprom[page];
 
-	 for (i=0; i<FLASH_PAGE_SIZE_D21; i++)
+	 for (i=0; i<FLASH_PAGE_SIZE; i++)
 	 {
 	    if (ptrData[i] != FLASH_ERASE_VALUE)
 	    {
@@ -190,18 +193,18 @@ static uint32_t eepromGetNextWritPage(void)
 	    return page;
 	 }
       }
-      page=page+FLASH_PAGE_SIZE_D21;
+      page=page+FLASH_PAGE_SIZE;
    }
    //if we get get here all the pages are full...
    // we need to find the page with last good data.
    page=findLastGoodPage();
 
    //find which row the page is in
-   row=page/FLASH_ROW_SIZE;
+   row=page/FLASH_ERASE_SIZE;
 
    //increment to next row for erase
    row++;
-   if ((row*FLASH_ROW_SIZE)>=EEPROM_SIZE)
+   if ((row*FLASH_ERASE_SIZE)>=EEPROM_SIZE)
    {
       row=0;
       //TODO we should make sure this not where good data is
@@ -210,8 +213,8 @@ static uint32_t eepromGetNextWritPage(void)
 
    //now we need to erase that row
    //WARNING("Erasing page %d",row*FLASH_ROW_SIZE);
-   flashErase((void *)&NVM_eeprom[row*FLASH_ROW_SIZE],FLASH_ROW_SIZE);
-   page=row*FLASH_ROW_SIZE;
+   flashErase((void *)&NVM_eeprom[row*FLASH_ERASE_SIZE],FLASH_ERASE_SIZE);
+   page=row*FLASH_ERASE_SIZE;
    //LOG("Next free page is %d",page);
    return page;
 }
@@ -295,7 +298,7 @@ eepromError_t eepromFlush(void) //flush the cache to flash memory
 
   // printEEPROM(NextPageWrite);
 
-   if (!SYSCTRL->PCLKSR.bit.BOD33DET) //if not in brown out condition find next write location
+   if (!SUPC->STATUS.bit.BOD33DET) //if not in brown out condition find next write location
    {
        //LOG("getting next page to write");
       NextPageWrite=eepromGetNextWritPage(); //find next write location and erase if needed

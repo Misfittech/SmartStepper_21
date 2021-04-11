@@ -1,153 +1,205 @@
-/**
- * \file
- *
- * \brief Linker script for running in internal FLASH on the SAME51J19A
- *
- * Copyright (c) 2019 Microchip Technology Inc.
- *
- * \asf_license_start
- *
- * \page License
- *
- * SPDX-License-Identifier: Apache-2.0
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the Licence at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an AS IS BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * \asf_license_stop
- *
+/*
+  Copyright (c) 2014-2015 Arduino LLC.  All right reserved.
+
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 2.1 of the License, or (at your option) any later version.
+
+  This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  See the GNU Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public
+  License along with this library; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+/* Linker script to configure memory regions.
+ * Need modifying for a specific board.
+ *   FLASH.ORIGIN: starting address of flash
+ *   FLASH.LENGTH: length of flash
+ *   RAM.ORIGIN: starting address of RAM bank 0
+ *   RAM.LENGTH: length of RAM bank 0
  */
-
-
-OUTPUT_FORMAT("elf32-littlearm", "elf32-littlearm", "elf32-littlearm")
-OUTPUT_ARCH(arm)
-SEARCH_DIR(.)
-
-/* Memory Spaces Definitions */
 MEMORY
 {
-  rom      (rx)  : ORIGIN = 0x00000000, LENGTH = 0x00080000
-  ram      (rwx) : ORIGIN = 0x20000000, LENGTH = 0x00030000
-  bkupram  (rwx) : ORIGIN = 0x47000000, LENGTH = 0x00002000
+  FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 0x00080000 
+  RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 0x00030000
+/*  bkupram  (rwx) : ORIGIN = 0x47000000, LENGTH = 0x00002000
   qspi     (rwx) : ORIGIN = 0x04000000, LENGTH = 0x01000000
+ */
 }
 
-/* The stack size used by the application. NOTE: you need to adjust according to your application. */
-STACK_SIZE = DEFINED(STACK_SIZE) ? STACK_SIZE : DEFINED(__stack_size__) ? __stack_size__ : 0xC000;
+/* Linker script to place sections and symbol values. Should be used together
+ * with other linker script that defines memory regions FLASH and RAM.
+ * It references following symbols, which must be defined in code:
+ *   Reset_Handler : Entry of reset handler
+ *
+ * It defines following symbols, which code can use without definition:
+ *   __exidx_start
+ *   __exidx_end
+ *   __copy_table_start__
+ *   __copy_table_end__
+ *   __zero_table_start__
+ *   __zero_table_end__
+ *   __etext
+ *   __data_start__
+ *   __preinit_array_start
+ *   __preinit_array_end
+ *   __init_array_start
+ *   __init_array_end
+ *   __fini_array_start
+ *   __fini_array_end
+ *   __data_end__
+ *   __bss_start__
+ *   __bss_end__
+ *   __end__
+ *   end
+ *   __HeapLimit
+ *  __StackStart
+ *   __StackLimit
+ *   __StackTop
+ *   __stack
+ *   __ram_end__
+ */
+ENTRY(Reset_Handler)
 
-/* Section Definitions */
 SECTIONS
 {
-    .text :
-    {
-        . = ALIGN(4);
-        _sfixed = .;
-        KEEP(*(.vectors .vectors.*))
-        *(.text .text.* .gnu.linkonce.t.*)
-        *(.glue_7t) *(.glue_7)
-        *(.rodata .rodata* .gnu.linkonce.r.*)
-        *(.ARM.extab* .gnu.linkonce.armextab.*)
+	.text :
+	{
+		__text_start__ = .;
 
-        /* Support C constructors, and C destructors in both user code
-           and the C library. This also provides support for C++ code. */
-        . = ALIGN(4);
-        KEEP(*(.init))
-        . = ALIGN(4);
-        __preinit_array_start = .;
-        KEEP (*(.preinit_array))
-        __preinit_array_end = .;
+		KEEP(*(.isr_vector))
+		*(.text*)
 
-        . = ALIGN(4);
-        __init_array_start = .;
-        KEEP (*(SORT(.init_array.*)))
-        KEEP (*(.init_array))
-        __init_array_end = .;
+		KEEP(*(.init))
+		KEEP(*(.fini))
 
-        . = ALIGN(4);
-        KEEP (*crtbegin.o(.ctors))
-        KEEP (*(EXCLUDE_FILE (*crtend.o) .ctors))
-        KEEP (*(SORT(.ctors.*)))
-        KEEP (*crtend.o(.ctors))
+		/* .ctors */
+		*crtbegin.o(.ctors)
+		*crtbegin?.o(.ctors)
+		*(EXCLUDE_FILE(*crtend?.o *crtend.o) .ctors)
+		*(SORT(.ctors.*))
+		*(.ctors)
 
-        . = ALIGN(4);
-        KEEP(*(.fini))
+		/* .dtors */
+ 		*crtbegin.o(.dtors)
+ 		*crtbegin?.o(.dtors)
+ 		*(EXCLUDE_FILE(*crtend?.o *crtend.o) .dtors)
+ 		*(SORT(.dtors.*))
+ 		*(.dtors)
 
-        . = ALIGN(4);
-        __fini_array_start = .;
-        KEEP (*(.fini_array))
-        KEEP (*(SORT(.fini_array.*)))
-        __fini_array_end = .;
+		*(.rodata*)
 
-        KEEP (*crtbegin.o(.dtors))
-        KEEP (*(EXCLUDE_FILE (*crtend.o) .dtors))
-        KEEP (*(SORT(.dtors.*)))
-        KEEP (*crtend.o(.dtors))
+		KEEP(*(.eh_frame*))
+	} > FLASH
+	
+	 .nvm (NOLOAD) :
+   	{
+     	. = ALIGN(4);
+        KEEP(*(.nvm*))
+    } > FLASH 
+    
+    .flash :
+   	{
+     	. = ALIGN(4);
+        KEEP(*(.flash*))
+    } > FLASH
 
-        . = ALIGN(4);
-        _efixed = .;            /* End of text section */
-    } > rom
+	.ARM.extab :
+	{
+		*(.ARM.extab* .gnu.linkonce.armextab.*)
+	} > FLASH
 
-    /* .ARM.exidx is sorted, so has to go in its own output section.  */
-    PROVIDE_HIDDEN (__exidx_start = .);
-    .ARM.exidx :
-    {
-      *(.ARM.exidx* .gnu.linkonce.armexidx.*)
-    } > rom
-    PROVIDE_HIDDEN (__exidx_end = .);
+	__exidx_start = .;
+	.ARM.exidx :
+	{
+		*(.ARM.exidx* .gnu.linkonce.armexidx.*)
+	} > FLASH
+	__exidx_end = .;
 
-    . = ALIGN(4);
-    _etext = .;
+	/* To copy multiple ROM to RAM sections,
+	 * uncomment .copy.table section and,
+	 * define __STARTUP_COPY_MULTIPLE in startup_ARMCMx.S */
+	/*
+	.copy.table :
+	{
+		. = ALIGN(4);
+		__copy_table_start__ = .;
+		LONG (__etext)
+		LONG (__data_start__)
+		LONG (__data_end__ - __data_start__)
+		LONG (__etext2)
+		LONG (__data2_start__)
+		LONG (__data2_end__ - __data2_start__)
+		__copy_table_end__ = .;
+	} > FLASH
+	*/
 
-    .relocate : AT (_etext)
-    {
-        . = ALIGN(4);
-        _srelocate = .;
-        *(.ramfunc .ramfunc.*);
-        *(.data .data.*);
-        . = ALIGN(4);
-        _erelocate = .;
-    } > ram
+	/* To clear multiple BSS sections,
+	 * uncomment .zero.table section and,
+	 * define __STARTUP_CLEAR_BSS_MULTIPLE in startup_ARMCMx.S */
+	/*
+	.zero.table :
+	{
+		. = ALIGN(4);
+		__zero_table_start__ = .;
+		LONG (__bss_start__)
+		LONG (__bss_end__ - __bss_start__)
+		LONG (__bss2_start__)
+		LONG (__bss2_end__ - __bss2_start__)
+		__zero_table_end__ = .;
+	} > FLASH
+	*/
 
-    .bkupram (NOLOAD):
-    {
-        . = ALIGN(8);
-        _sbkupram = .;
-        *(.bkupram .bkupram.*);
-        . = ALIGN(8);
-        _ebkupram = .;
-    } > bkupram
+	__etext = .;
 
-    .qspi (NOLOAD):
-    {
-        . = ALIGN(8);
-        _sqspi = .;
-        *(.qspi .qspi.*);
-        . = ALIGN(8);
-        _eqspi = .;
-    } > qspi
+	.data : AT (__etext)
+	{
+		__data_start__ = .;
+		*(vtable)
+		*(.data*)
 
-    /* .bss section which is used for uninitialized data */
-    .bss (NOLOAD) :
-    {
-        . = ALIGN(4);
-        _sbss = . ;
-        _szero = .;
-        *(.bss .bss.*)
-        *(COMMON)
-        . = ALIGN(4);
-        _ebss = . ;
-        _ezero = .;
-    } > ram
+		. = ALIGN(4);
+		/* preinit data */
+		PROVIDE_HIDDEN (__preinit_array_start = .);
+		KEEP(*(.preinit_array))
+		PROVIDE_HIDDEN (__preinit_array_end = .);
 
+		. = ALIGN(4);
+		/* init data */
+		PROVIDE_HIDDEN (__init_array_start = .);
+		KEEP(*(SORT(.init_array.*)))
+		KEEP(*(.init_array))
+		PROVIDE_HIDDEN (__init_array_end = .);
+
+
+		. = ALIGN(4);
+		/* finit data */
+		PROVIDE_HIDDEN (__fini_array_start = .);
+		KEEP(*(SORT(.fini_array.*)))
+		KEEP(*(.fini_array))
+		PROVIDE_HIDDEN (__fini_array_end = .);
+
+		KEEP(*(.jcr*))
+		. = ALIGN(16);
+		/* All data end */
+		__data_end__ = .;
+
+	} > RAM
+
+	.bss :
+	{
+		. = ALIGN(4);
+		__bss_start__ = .;
+		*(.bss*)
+		*(COMMON)
+		. = ALIGN(4);
+		__bss_end__ = .;
+	} > RAM
 
 	.heap (COPY):
 	{
@@ -156,30 +208,25 @@ SECTIONS
 		PROVIDE(end = .);
 		*(.heap*)
 		__HeapLimit = .;
-	} > ram
-	
+	} > RAM
 	. = ALIGN(4);
 	__StackStart = .;
-    /* stack section */
-    .stack (NOLOAD):
-    {
-        . = ALIGN(8);
-        _sstack = .;
-        . = . + STACK_SIZE;
-        . = ALIGN(8);
-        _estack = .;
-    } > ram
 
-    . = ALIGN(4);
-    _end = . ;
-    
-    /* Set stack top to end of RAM, and stack limit move down by
+	/* .stack_dummy section doesn't contains any symbols. It is only
+	 * used for linker to calculate size of stack sections, and assign
+	 * values to stack symbols later */
+	.stack_dummy (COPY):
+	{
+		*(.stack*)
+	} > RAM
+
+	/* Set stack top to end of RAM, and stack limit move down by
 	 * size of stack_dummy section */
-	__StackTop = ORIGIN(ram) + LENGTH(ram) ;
+	__StackTop = ORIGIN(RAM) + LENGTH(RAM) ;
 	__StackLimit = __StackTop - SIZEOF(.stack_dummy);
 	PROVIDE(__stack = __StackTop);
 
-	__ram_end__ = ORIGIN(ram) + LENGTH(ram) -1 ;
+	__ram_end__ = ORIGIN(RAM) + LENGTH(RAM) -1 ;
 
 	/* Check if data + heap + stack exceeds RAM limit */
 	ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed with stack")

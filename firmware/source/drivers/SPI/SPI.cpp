@@ -17,7 +17,7 @@ static inline bool sercomSync(Sercom *pSercom)
 
 	while(pSercom->SPI.SYNCBUSY.bit.ENABLE && t0>0)
 	{
-		delay_us(1);
+		//delay_us(1);
 		t0--;
 	}
 	if (t0==0)
@@ -28,14 +28,15 @@ static inline bool sercomSync(Sercom *pSercom)
 }
 
 
-bool SPI::setup(Sercom *pSercom, pin_t mosi, pin_t miso, pin_t sck,pin_t cs)
+bool SPI::setup(pin_t mosi, pin_t miso, pin_t sck,pin_t cs)
 {
-	ASSERT(pSercom);
+	
 	_pinMosi=mosi;
 	_pinMiso=miso;
 	_pinSck=sck;
 	_pinCs=cs;
-	_pSercom=pSercom;
+	_pSercom=(Sercom *)sck.ptrPerherial;
+	ASSERT(_pSercom);
 
 	//setup the pins
 	PinConfig(_pinMosi);
@@ -248,7 +249,7 @@ bool SPI::transfer(uint8_t txData, uint8_t *ptrRxData)
 	while( _pSercom->SPI.INTFLAG.bit.DRE == 0 && to>0)
 	{
 		// Waiting Data Registry Empty
-		//_delay_us(1);
+		delay_us(1);
 		to--;
 	}
 	if (to==0)
@@ -267,7 +268,7 @@ bool SPI::transfer(uint8_t txData, uint8_t *ptrRxData)
 			&& to>0)
 	{
 		// Waiting Complete Reception
-		//_delay_us(1);
+		//delay_us(1);
 		to--;
 	}
 	if (to==0)
@@ -297,4 +298,18 @@ size_t SPI::transfer(const uint8_t *ptrTXData, uint8_t *ptrRXData, size_t cnt)
 		n++;
 	}
 	return n;
+}
+
+uint16_t SPI::transfer16(uint16_t txData)
+{
+	uint16_t ret;
+	uint8_t data;
+	uint8_t tx;
+	tx=(uint8_t)(txData>>8);
+	transfer(tx, &data);
+	ret=data;
+	tx=(uint8_t)(txData);
+	transfer(tx, &data);
+	ret=ret<<8 | (uint16_t)data;
+	return ret;
 }

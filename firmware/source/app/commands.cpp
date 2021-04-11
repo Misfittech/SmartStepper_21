@@ -301,7 +301,8 @@ static int home_cmd(sCmdUart *ptrUart,int argc, char * argv[])
 	}
 
 	//setup a interrupt for the enable  pin
-	attachInterrupt(digitalPinToInterrupt(PIN_ENABLE), errorPinISR, FALLING);
+	PinEnableInterrupt(PIN_ENABLE,FALLING_EDGE,errorPinISR);
+
 
 	SmartPlanner.moveConstantVelocity(finalDegrees,rpm);
 
@@ -309,9 +310,9 @@ static int home_cmd(sCmdUart *ptrUart,int argc, char * argv[])
 	{
 		//do nothing
 	}
-	detachInterrupt(digitalPinToInterrupt(PIN_ENABLE));
+	PinDisableInterrupt(PIN_ENABLE);
 	deg=ANGLE_T0_DEGREES(stepperCtrl.getCurrentAngle());
-	ftoa(deg,str,2,'f');
+	
 	CommandPrintf(ptrUart,"home is %s deg\n\r",str);
 	stepperCtrl.setZero();
 
@@ -982,7 +983,7 @@ static int enablepinmode_cmd(sCmdUart *ptrUart,int argc, char * argv[])
 
 			SystemParams_t systemParams;
 
-			memcpy(&systemParams,&NVM->SystemParams, sizeof(systemParams) );
+			memcpy(&systemParams,(void *)&NVM->SystemParams, sizeof(systemParams) );
 
 			systemParams.errorPinMode=(ErrorPinMode_t)x;
 
@@ -1511,7 +1512,7 @@ static int testcal_cmd(sCmdUart *ptrUart,int argc, char * argv[])
 }
 
 sCmdUart CommandsUart;
-sCmdUart RS485Uart;
+//sCmdUart RS485Uart;
 //UART *Ptr_uart;
 
 
@@ -1526,4 +1527,5 @@ int commandsProcess(void)
 {
 	return CommandProcess(&CommandsUart,Cmds,' ',(const char *)COMMANDS_PROMPT);
 	//return CommandProcess(&RS485Uart,Cmds,' ',(const char *)COMMANDS_PROMPT);
+	return 0;
 }

@@ -177,24 +177,22 @@ void EICInit(void)
 }
 
 
-void PinEnableInterrupt(pin_t pin, InterruptType_t type, std::function<void()> ptrFunc)
+void PinEnableInterrupt(pin_t pin, InterruptType_t type, voidCallback_t callback)
 
 {
 	uint32_t id;
 	id=pin.id;
+	
+	ASSERT(pin.ptrPerherial == EIC) //You forgot to configure pin for EIC
+	ASSERT(id<EIC_EXTINT_NUM) //Too high of EIC number
 
-	if (id>=EIC_EXTINT_NUM)
-	{
-		ERROR("Too high of EIC number");
-		return;
-	}
 	PinConfig(pin);
 	if (!EICInitDone)
 	{
 		EICInit();
 	}
 
-	InterruptCallbacks[id]=ptrFunc;
+	InterruptCallbacks[id]=callback;
 
 	EIC->CTRLA.bit.ENABLE=0;
 	while(EIC->SYNCBUSY.reg)

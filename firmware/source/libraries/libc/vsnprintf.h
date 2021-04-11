@@ -11,13 +11,14 @@
 #include <stdarg.h>
 #include <memory.h> //for size_t
 #include <stdarg.h>
-
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
+size_t _ftoa(char *buf, size_t maxLen, double value, uint8_t prec);
 size_t _snprintf(char *ptrStr, size_t maxLen, const char *fmt, ...);
 size_t _vsnprintf(char *ptrStr, size_t maxLen, const char *fmt, va_list ap);
 

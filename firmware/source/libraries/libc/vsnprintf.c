@@ -16,7 +16,11 @@
 
 //we assume if we printed a binary 64 bit number we would need 64 chars
 // note printf does not current allow binary but...
+#ifdef MAX_STRING_LEN
+#define MAX_CHAR_NUMBER MAX_STRING_LEN
+#else
 #define MAX_CHAR_NUMBER (66) //maximum number of chars in a number
+#endif
 
 typedef enum {
 	FLAG_NONE = 0,
@@ -30,7 +34,7 @@ typedef enum {
 
 
 
-
+#pragma GCC optimize ("O3")
 static size_t u64t0a(char *buf, size_t maxLen, uint64_t value, uint8_t base, Flags_t flags)
 {
 	size_t i;
@@ -97,6 +101,8 @@ static size_t u64t0a(char *buf, size_t maxLen, uint64_t value, uint8_t base, Fla
 	//we should never get here
 	return 0;
 }
+
+#pragma GCC optimize ("O3")
 size_t l64toa(char *buf, size_t maxLen, uint64_t value, uint8_t base, Flags_t flags)
 {
 	int64_t x;
@@ -128,6 +134,7 @@ size_t l64toa(char *buf, size_t maxLen, uint64_t value, uint8_t base, Flags_t fl
 	return n;
 }
 
+#pragma GCC optimize ("O3")
 static size_t uftoa(char *buf, size_t maxLen, double value, uint8_t prec)
 {
 	size_t i;
@@ -195,8 +202,20 @@ static size_t uftoa(char *buf, size_t maxLen, double value, uint8_t prec)
 		value=value*10.0 - ((double)c);
 		p++;
 	}
-
+	buf[i]='\0';
 	return i;
+}
+
+
+size_t _ftoa(char *buf, size_t maxLen, double value, uint8_t prec)
+{
+	if (value<0)
+	{
+		value=-value;
+		buf[0]='-';
+		return uftoa(&buf[1],maxLen-1,value,prec)+1;
+	}
+	return uftoa(buf,maxLen,value,prec);
 }
 
 //reads two chars from buf and returns number
@@ -222,7 +241,7 @@ static uint8_t getSize(const char *buf)
 	return 0;
 }
 
-
+#pragma GCC optimize ("O3")
 size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 {
 	size_t i;
@@ -230,9 +249,13 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 
 	char num[MAX_CHAR_NUMBER];
 
+	if (maxLen==0)
+	{
+		return 0;
+	}
 
 	i=0;
-	while (*fmt && i<(maxLen-2)) //we need one space for next char and one for the '\0'
+	while (*fmt && i<(maxLen-1)) //we need one space for next char and one for the '\0'
 	{
 		if (*fmt == '%')
 		{
@@ -255,7 +278,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 				fmt++;
 				if (*fmt == '%')
 				{
-					if (i<(maxLen-1))
+					if (i<(maxLen))
 					{
 						buf[i++]='%';
 					}
@@ -316,7 +339,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 #else
 					c=(char)va_arg(ap,unsigned int);
 #endif
-					if (i<(maxLen-1))
+					if (i<(maxLen))
 					{
 						buf[i++]=c;
 					}
@@ -328,12 +351,17 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 					done=true;
 					char * ptr;
 					ptr=(char*)va_arg(ap,char*);
+					if (ptr== NULL)
+					{
+						buf[0]='\0';
+						return 0; 
+					}
 
 					n=(uint8_t)strlen(ptr);
 
 					while (n<width)
 					{
-						if (i<(maxLen-1))
+						if (i<(maxLen))
 						{
 							if (flags & FLAG_PAD_ZERO)
 							{
@@ -346,7 +374,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 						width--;
 					}
 
-					while(*ptr && i<(maxLen-1))
+					while(*ptr && i<(maxLen))
 					{
 						buf[i++]=*ptr++;
 					}
@@ -354,7 +382,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 
 
 
-				if (*fmt == 'x' || *fmt == 'X' || *fmt=='o')
+				if (*fmt == 'x' || *fmt == 'X' || *fmt=='o' || *fmt == 'p')
 				{
 					if (*fmt == 'X')
 					{
@@ -418,7 +446,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 
 					while (n<width)
 					{
-						if (i<(maxLen-1))
+						if (i<(maxLen))
 						{
 							if (flags & FLAG_PAD_ZERO)
 							{
@@ -431,7 +459,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 						width--;
 					}
 
-					if ((i+n)<(maxLen-1))
+					if ((i+n)<(maxLen))
 					{
 						memcpy(&buf[i],num,n);
 						i+=n;
@@ -447,7 +475,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 					//do the '+' if needed
 					if ((flags & FLAG_PLUS) && x>0)
 					{
-						if (i<(maxLen-1))
+						if (i<(maxLen))
 						{
 							buf[i++]='+';
 							if (width>0)
@@ -460,7 +488,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 					//do '-' minus sign if needed
 					if (x<0)
 					{
-						if (i<(maxLen-1))
+						if (i<(maxLen))
 						{
 							buf[i++]='-';
 							if (width>0)
@@ -484,7 +512,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 
 					while (n<width)
 					{
-						if (i<(maxLen-1))
+						if (i<(maxLen))
 						{
 							if (flags & FLAG_PAD_ZERO)
 							{
@@ -497,7 +525,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 						width--;
 					}
 
-					if ((i+n)<(maxLen-1))
+					if ((i+n)<(maxLen))
 					{
 						memcpy(&buf[i],num,n);
 						i+=n;
@@ -554,7 +582,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 					}
 					if ((flags & FLAG_PLUS) && sx>0)
 					{
-						if (i<(maxLen-1))
+						if (i<(maxLen))
 						{
 							buf[i++]='+';
 							if (width>0)
@@ -565,7 +593,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 					}
 					if (sx<0)
 					{
-						if (i<(maxLen-1))
+						if (i<(maxLen))
 						{
 							buf[i++]='-';
 							if (width>0)
@@ -579,7 +607,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 
 					while (n<width)
 					{
-						if (i<(maxLen-1))
+						if (i<(maxLen))
 						{
 							if (flags & FLAG_PAD_ZERO)
 							{
@@ -592,7 +620,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 						width--;
 					}
 
-					if ((i+n)<(maxLen-1))
+					if ((i+n)<(maxLen))
 					{
 						memcpy(&buf[i],num,n);
 						i+=n;
@@ -648,7 +676,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 					}
 					if ((flags & FLAG_PLUS))
 					{
-						if (i<(maxLen-1))
+						if (i<(maxLen))
 						{
 							buf[i++]='+';
 							if (width>0)
@@ -661,7 +689,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 
 					while (n<width)
 					{
-						if (i<(maxLen-1))
+						if (i<(maxLen))
 						{
 							if (flags & FLAG_PAD_ZERO)
 							{
@@ -674,7 +702,7 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 						width--;
 					}
 
-					if ((i+n)<(maxLen-1))
+					if ((i+n)<(maxLen))
 					{
 						memcpy(&buf[i],num,n);
 						i+=n;
@@ -693,11 +721,14 @@ size_t _vsnprintf(char *buf, size_t maxLen, const char *fmt, va_list ap)
 		fmt++;
 	}
 
-	if (i<(maxLen-1))
+	//always add termination character. 
+	if (i<(maxLen))
 	{
-		buf[i++]='\0';
+		buf[i]='\0';
+	}else
+	{
+		buf[maxLen-1]='\0';
 	}
-	buf[maxLen-1]='\0';
 	return i;
 }
 
