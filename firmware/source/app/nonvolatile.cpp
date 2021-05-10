@@ -107,7 +107,7 @@ bool nvmWrite_pPID(float Kp, float Ki, float Kd)
 bool nvmWriteSystemParms(SystemParams_t &systemParams)
 {
 	systemParams.crc=ParametersCrc(&systemParams,sizeof(systemParams));
-
+	LOG("writting system parameters");
 	flashWrite((void *)&NVM->SystemParams,&systemParams,sizeof(systemParams));
 	return true;
 }

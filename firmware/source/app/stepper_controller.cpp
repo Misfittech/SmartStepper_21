@@ -42,6 +42,13 @@ void isr_timer()
 
 	error=(stepperCtrl.processFeedback()); //handle the control loop
 	RED_LED(error);
+	if (error)
+	{
+		PinHigh(PIN_ERROR_OUT);
+	}else
+	{
+		PinLow(PIN_ERROR_OUT);
+	}
 	dt=micros()-dt;
 	x=micros()-t;
 	t=micros();
@@ -71,6 +78,7 @@ void StepperCtrl::updateParamsFromNVM(void)
 
 	}else
 	{
+		LOG("Reseting system parameters");
 		systemParams.microsteps=16;
 		systemParams.controllerMode=CTRL_SIMPLE;
 		systemParams.dirPinRotation=CW_ROTATION; //default to clockwise rotation when dir is high
@@ -96,8 +104,8 @@ void StepperCtrl::updateParamsFromNVM(void)
 	{
 		//MotorParams_t Params;
 		motorParams.fullStepsPerRotation=200;
-		motorParams.currentHoldMa=100;
-		motorParams.currentMa=1000;
+		motorParams.currentHoldMa=500;
+		motorParams.currentMa=2000;
 		motorParams.homeHoldMa=100;
 		motorParams.homeMa=500;
 		motorParams.motorWiring=true;
@@ -550,6 +558,7 @@ bool StepperCtrl::calibrateEncoder(void)
 	bool state=_tc.enterCritical();
 
 
+
 	enableFeedback=false;
 	systemParams.microsteps=1;
 	LOG("reset motor");
@@ -605,10 +614,10 @@ bool StepperCtrl::calibrateEncoder(void)
 		for (ii=0; ii<N; ii++)
 		{
 			steps+=DRV8434_NUM_MICROSTEPS/N;
-			stepperDriver.move(steps,motorParams.currentMa);
+			stepperDriver.move(steps,motorParams.currentMa/2);
 			//delay_ms(25);
 		}
-		stepperDriver.move(steps,motorParams.currentMa);
+		stepperDriver.move(steps,motorParams.currentMa/2);
 		//delay_ms(50);
 
 		//steps+=DRV8434_NUM_MICROSTEPS/2;
@@ -622,11 +631,11 @@ bool StepperCtrl::calibrateEncoder(void)
 			updateStep(0,1);
 			// move one half step at a time, a full step move could cause a move backwards depending on how current ramps down
 			steps+=DRV8434_NUM_MICROSTEPS/2;
-			stepperDriver.move(steps,motorParams.currentMa);
+			stepperDriver.move(steps,motorParams.currentMa/2);
 
 			delay_ms(100);
 			steps+=DRV8434_NUM_MICROSTEPS/2;
-			stepperDriver.move(steps,motorParams.currentMa);
+			stepperDriver.move(steps,motorParams.currentMa/2);
 
 		}
 
@@ -664,6 +673,9 @@ stepCtrlError_t StepperCtrl::begin(void)
 	velocity=0;
 	currentLocation=0;
 	numSteps=0;
+	
+	PinConfig(PIN_ERROR_OUT);
+	PinHigh(PIN_ERROR_OUT);
 
 	//we have to update from NVM before moving motor
 	updateParamsFromNVM(); //update the local cache from the NVM
@@ -682,8 +694,10 @@ stepCtrlError_t StepperCtrl::begin(void)
 
 	LOG("start stepper driver");
 	stepperDriver.begin();
+	
 
-#ifdef NEMA17_SMART_STEPPER_3_21_2017
+
+#if defined(NEMA17_SMART_STEPPER_3_21_2017) || defined(SMARTER_STEPPER_2_8_2021)
 	if (ParametersValid((void *)&NVM->motorParams,sizeof(NVM->motorParams)))
 	{
 		//lets read the motor voltage
@@ -728,7 +742,7 @@ stepCtrlError_t StepperCtrl::begin(void)
 	LOG("Checking the motor parameters");
 	//todo we might want to move this up a level to the NZS
 	//  especially since it has default values
-	if (ParametersValid((void *)&NVM->motorParams,sizeof(NVM->motorParams)))
+	if (!ParametersValid((void *)&NVM->motorParams,sizeof(NVM->motorParams)))
 	{
 		MotorParams_t params;
 		WARNING("NVM motor parameters are not set, we will update");
@@ -775,13 +789,14 @@ stepCtrlError_t StepperCtrl::begin(void)
 
 	if (false == calTable.calValid())
 	{
+		
 		return STEPCTRL_NO_CAL;
 	}
-
 
 	enableFeedback=true;
 	_tc.setup(NZS_TIMER,GENERIC_CLOCK_GENERATOR_48M,GCLK_freq[GENERIC_CLOCK_GENERATOR_48M],TC_PRESCALER_DIV8);
 	_tc.init_periodic(isr_timer,NZS_CONTROL_LOOP_HZ);
+	
 	return STEPCTRL_NO_ERROR;
 
 }
@@ -1377,7 +1392,6 @@ bool StepperCtrl::simpleFeedback(int64_t desiredLoc, int64_t currentLoc, Control
 	
 		//error is in units of degrees when 360 degrees == 65536
 		error=(desiredLoc-y);//measureError(); //error is currentPos-desiredPos
-
 
 		//data[i]=(int16_t)error;
 		//i++;

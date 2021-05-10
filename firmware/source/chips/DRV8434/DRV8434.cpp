@@ -226,10 +226,15 @@ void DRV8434::limitCurrent(uint8_t percent)
 
 void DRV8434::enable(bool enable)
 {
+	if (!enabled && enable)
+	{
+		PinHigh(PIN_DVR_SLEEP); //exit sleep mode. 
+	}
 	enabled=enable;
 	if (enabled == false)
 	{
 		WARNING("A4954 disabled");
+		PinLow(PIN_DVR_SLEEP); //put in sleep mode
 		setDAC(0,0); //turn current off
 		bridge1(3); //tri state bridge outputs
 		bridge2(3); //tri state bridge outputs
@@ -250,7 +255,42 @@ int32_t DRV8434::move(int32_t stepAngle, uint32_t mA)
 	uint16_t angle;
 	int32_t cos,sin;
 	int32_t dacSin,dacCos;
-	//static int i=0;
+	static int32_t thermal=0;
+	static uint32_t lastTime=millis(); 
+	//static uint32_t report=millis();
+	int32_t dt;
+	
+	//if over our time period we have exceeded thermal load
+	if ((thermal/(1500))>DRV8434_MAX_THERMAL_MA) //1.5A Continuous over ~1.5 seconds 
+	{
+		//reduce current to match thermal load 
+		if (mA>DRV8434_MAX_THERMAL_MA) {
+			//LOG("Current limit");
+			mA-=(thermal/(1500) -DRV8434_MAX_THERMAL_MA);
+		}
+	}
+	
+	//calculate the thermal load
+	dt=millis()-lastTime; 
+	if (dt>0)
+	{
+		thermal+= dt*mA; //heat added
+		
+		//remove the heat loss.... 
+		if (thermal>0)
+		{
+			thermal -= MIN(DRV8434_MAX_THERMAL_MA*dt,thermal); 
+		}
+		
+		lastTime=millis();
+	}
+	
+//	if (millis()>(report+500))
+//	{
+//		LOG("thremal %d, ma %d, load %d", thermal,mA, thermal/1500 -1500);
+//		report=millis();
+//	}
+	
 	
 	mA=MIN(DRV8434_MAX_MA, mA);
 
@@ -263,6 +303,13 @@ int32_t DRV8434::move(int32_t stepAngle, uint32_t mA)
 		return stepAngle;
 	}
 
+	if (!PinRead(PIN_DVR_FAULT))
+	{
+		WARNING("DRV8434P fault");
+		PinLow(PIN_DVR_SLEEP);
+		delay_us(30);
+		PinHigh(PIN_DVR_SLEEP);
+	}
 
 	//WARNING("move %d %d",stepAngle,mA);
 	//handle roll overs, could do with modulo operator
@@ -315,6 +362,8 @@ int32_t DRV8434::move(int32_t stepAngle, uint32_t mA)
 		{
 			bridge1(0);
 		}
+	} else {
+		bridge1(3); //brake for zero current
 	}
 	if (cos != 0)
 	{
@@ -325,6 +374,8 @@ int32_t DRV8434::move(int32_t stepAngle, uint32_t mA)
 		{
 			bridge2(0);
 		}
+	}else {
+		bridge2(3); //brake for zero current
 	}
 
 	//	if (i++>3000)

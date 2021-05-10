@@ -20,20 +20,19 @@ void configure_pins(void)
 {
 	PinConfig(GREEN_LED_PIN);
 	PinConfig(RED_LED_PIN);
+	PinConfig(PIN_CAL_BUTTON);
 	RED_LED(0);
-	GREEN_LED(1);
+	GREEN_LED(0);
 }
 #define SerialUSB Serial
 
 USBCharDevice usbSerial;
 int main()
 {
-	
 	NZS nzs;
 	uint32_t ctrl;
 	uint32_t to;
 	bool led_state=false;
-
 	
 		//enable the floating point hardware unit
 	ctrl=__get_CONTROL();

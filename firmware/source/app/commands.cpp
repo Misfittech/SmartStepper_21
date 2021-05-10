@@ -125,6 +125,7 @@ CMD_STR(errorpin, "Sets the logic level of error pin")
 CMD_STR(geterror, "gets current error")
 CMD_STR(getsteps, "returns number of steps seen")
 CMD_STR(debug, "enables debug commands out USB")
+CMD_STR(version, "prints firmware version")
 //List of supported commands
 sCommand Cmds[] =
 {
@@ -182,6 +183,7 @@ sCommand Cmds[] =
 		COMMAND(errorpin),
 		COMMAND(geterror),
 		COMMAND(getsteps),
+		COMMAND(version),
 //		COMMAND(debug),
 		{"",0,""}, //End of list signal
 };
@@ -195,6 +197,12 @@ sCommand Cmds[] =
 //		SysLogDebug(i);
 //	}
 //}
+
+static int version_cmd(sCmdUart *ptrUart,int argc, char * argv[])
+{
+	CommandPrintf(ptrUart,"FW version " FW_VERSION_STR "\n\r");
+	return 0;
+}
 
 static int getsteps_cmd(sCmdUart *ptrUart,int argc, char * argv[])
 {
@@ -1115,9 +1123,17 @@ static int move_cmd(sCmdUart *ptrUart,int argc, char * argv[])
 	return 0;
 }
 
+
+
+#define DBL_TAP_PTR ((volatile uint32_t *)(HSRAM_ADDR + HSRAM_SIZE - 4))
+#define DBL_TAP_MAGIC 0xf01669ef // Randomly selected, adjusted to have first and last bit set
+//#define DBL_TAP_MAGIC_QUICK_BOOT 0xf02669ef
+
 static int boot_cmd(sCmdUart *ptrUart,int argc, char * argv[])
 {
 	//initiateReset(250);
+	*DBL_TAP_PTR=DBL_TAP_MAGIC;
+	NVIC_SystemReset();
 	return 0;
 }
 

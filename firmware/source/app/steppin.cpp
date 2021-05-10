@@ -146,15 +146,29 @@ void setupStepEvent(void)
 	//set up the direction pin PA10 to trigger external interrupt
 	//pinPeripheral(PIN_DIR_INPUT, PIO_EXTINT); //EXTINT10
 
+	PinConfig(PIN_STEP);
+	PinConfig(PIN_DIR);
 
+	EIC->CTRLA.bit.ENABLE=0;
+	
+	while(EIC->SYNCBUSY.reg)
+	{
+
+	}
+	
 	//***** setup EIC ******
 	EIC->EVCTRL.reg=(0x1 << PIN_STEP.id) | (0x1 << PIN_DIR.id);
-	//EIC->EVCTRL.bit.EXTINTEO10=1; //enable event for EXTINT10
 	//setup up external interurpt 11 to be rising edge triggered
 	//setup up external interurpt 10 to be both edge triggered
 //	
 	EIC->CONFIG[PIN_STEP.id/8].reg |= (EIC_CONFIG_SENSE0_RISE_Val<< ((PIN_STEP.id%8)*4));
-	EIC->CONFIG[PIN_DIR.id/8].reg |= (EIC_CONFIG_SENSE0_BOTH_Val<< ((PIN_DIR.id%8)*4));
+	EIC->CONFIG[PIN_DIR.id/8].reg |= (EIC_CONFIG_SENSE0_HIGH_Val<< ((PIN_DIR.id%8)*4));
+	
+	EIC->CTRLA.bit.ENABLE=1;
+	while(EIC->SYNCBUSY.reg)
+	{
+
+	}
 	
 	checkDir();
 

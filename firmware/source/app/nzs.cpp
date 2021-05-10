@@ -355,111 +355,111 @@ int dirPin(int argc, char *argv[])
 
 
 
-//
-//
-////this function is called when error pin changes as enable signal
-//static void enableInput(void)
-//{
-//	static bool lastState=true;
-//#ifdef PIN_ENABLE
-//	if (NVM->SystemParams.errorPinMode == ERROR_PIN_MODE_ENABLE)
-//	{
-//		static int enable;
-//		//read our enable pin
-//		enable = digitalRead(PIN_ENABLE);
-//		if (enable != enableState)
-//		{
-//			WARNING("Enable now %d",enable);
-//		}
-//		enableState=enable;
-//		//stepperCtrl.enable(enable);
-//	}
-//	if (NVM->SystemParams.errorPinMode == ERROR_PIN_MODE_ACTIVE_LOW_ENABLE)
-//	{
-//		static int enable;
-//		//read our enable pin
-//		enable = !digitalRead(PIN_ENABLE);
-//		if (enable != enableState)
-//		{
-//			WARNING("Enable now %d",enable);
-//		}
-//		enableState=enable;
-//		//stepperCtrl.enable(enable);
-//	}
-//#else
-//	if (NVM->SystemParams.errorPinMode == ERROR_PIN_MODE_ENABLE)
-//	{
-//		static int enable;
-//		//read our enable pin
-//		enable = digitalRead(PIN_ERROR);
-//		enableState=enable;
-//		//stepperCtrl.enable(enable);
-//	}
-//	if (NVM->SystemParams.errorPinMode == ERROR_PIN_MODE_ACTIVE_LOW_ENABLE)
-//	{
-//		static int enable;
-//		//read our enable pin
-//		enable = !digitalRead(PIN_ERROR);
-//		enableState=enable;
-//		//stepperCtrl.enable(enable);
-//	}
-//#endif
-//
-//#ifdef USE_STEP_DIR_SERIAL
-//
-//	static uint8_t pinCFG[2];
-//	static uint8_t pinMux[2];
-//	if (enableState == false  && lastState==true)
-//	{
-//		// turn the step/dir to serial port
-//
-//		//save pin config for restoring
-//		pinCFG[0]=getPinCfg(PIN_STEP_INPUT);
-//		pinCFG[1]=getPinCfg(PIN_DIR_INPUT);
-//		pinMux[0]=getPinMux(PIN_STEP_INPUT);
-//		pinMux[1]=getPinMux(PIN_DIR_INPUT);
-//
-//		//lets see if the step pin has interrupt enabled
-//		if (pinMux[0] == PORT_PMUX_PMUXE_A_Val)
-//		{
-//			EExt_Interrupts in = g_APinDescription[PIN_STEP_INPUT].ulExtInt;
-//			EIC->INTENCLR.reg = EIC_INTENCLR_EXTINT(1 << in); //disable the interrupt
-//			//we need to disable the interrupt
-//		}
-//
-//		//now we need to set the pins to serial port peripheral (sercom0)
-//		setPinMux(PIN_STEP_INPUT,PORT_PMUX_PMUXE_C_Val);
-//		setPinMux(PIN_DIR_INPUT,PORT_PMUX_PMUXE_C_Val);
-//
-//		//make sure that step pin is input with mux to peripheral
-//		setPinCfg(PIN_STEP_INPUT, PORT_PINCFG_PMUXEN | PORT_PINCFG_INEN | PORT_PINCFG_PULLEN);
-//
-//		//make sure that dir pin is an output with mux to peripheral
-//		setPinCfg(PIN_DIR_INPUT, PORT_PINCFG_PMUXEN );
-//
-//		Serial1.begin(STEP_DIR_BAUD);
-//
-//	}
-//	if (enableState == true  && lastState==false)
-//	{
-//		Serial1.end();
-//		setPinMux(PIN_STEP_INPUT,pinMux[0]);
-//		setPinMux(PIN_DIR_INPUT,pinMux[1]);
-//		setPinCfg(PIN_STEP_INPUT,pinCFG[0]);
-//		setPinCfg(PIN_DIR_INPUT,pinCFG[1]);
-//		//turn step/dir pins back to GPIO
-//		if (PORT_PMUX_PMUXE_A_Val == pinMux[0])
-//		{
-//			//if interrupt was enabled for step pin renable it.
-//			EExt_Interrupts in = g_APinDescription[PIN_STEP_INPUT].ulExtInt;
-//			EIC->INTENSET.reg = EIC_INTENCLR_EXTINT(1 << in); //enable the interrupt
-//		}
-//
-//	}
-//
-//#endif //USE_STEP_DIR_SERIAL
-//	lastState=enableState;
-//}
+
+
+//this function is called when error pin changes as enable signal
+static void enableInput(void)
+{
+	static bool lastState=true;
+#ifdef PIN_ENABLE
+	if (NVM->SystemParams.errorPinMode == ERROR_PIN_MODE_ENABLE)
+	{
+		static int enable;
+		//read our enable pin
+		enable = PinRead(PIN_ENABLE);
+		if (enable != enableState)
+		{
+			WARNING("Enable now %d",enable);
+		}
+		enableState=enable;
+		//stepperCtrl.enable(enable);
+	}
+	if (NVM->SystemParams.errorPinMode == ERROR_PIN_MODE_ACTIVE_LOW_ENABLE)
+	{
+		static int enable;
+		//read our enable pin
+		enable = !PinRead(PIN_ENABLE);
+		if (enable != enableState)
+		{
+			WARNING("Enable now %d",enable);
+		}
+		enableState=enable;
+		//stepperCtrl.enable(enable);
+	}
+#else
+	if (NVM->SystemParams.errorPinMode == ERROR_PIN_MODE_ENABLE)
+	{
+		static int enable;
+		//read our enable pin
+		enable = digitalRead(PIN_ERROR);
+		enableState=enable;
+		//stepperCtrl.enable(enable);
+	}
+	if (NVM->SystemParams.errorPinMode == ERROR_PIN_MODE_ACTIVE_LOW_ENABLE)
+	{
+		static int enable;
+		//read our enable pin
+		enable = !digitalRead(PIN_ERROR);
+		enableState=enable;
+		//stepperCtrl.enable(enable);
+	}
+#endif
+
+#ifdef USE_STEP_DIR_SERIAL
+
+	static uint8_t pinCFG[2];
+	static uint8_t pinMux[2];
+	if (enableState == false  && lastState==true)
+	{
+		// turn the step/dir to serial port
+
+		//save pin config for restoring
+		pinCFG[0]=getPinCfg(PIN_STEP_INPUT);
+		pinCFG[1]=getPinCfg(PIN_DIR_INPUT);
+		pinMux[0]=getPinMux(PIN_STEP_INPUT);
+		pinMux[1]=getPinMux(PIN_DIR_INPUT);
+
+		//lets see if the step pin has interrupt enabled
+		if (pinMux[0] == PORT_PMUX_PMUXE_A_Val)
+		{
+			EExt_Interrupts in = g_APinDescription[PIN_STEP_INPUT].ulExtInt;
+			EIC->INTENCLR.reg = EIC_INTENCLR_EXTINT(1 << in); //disable the interrupt
+			//we need to disable the interrupt
+		}
+
+		//now we need to set the pins to serial port peripheral (sercom0)
+		setPinMux(PIN_STEP_INPUT,PORT_PMUX_PMUXE_C_Val);
+		setPinMux(PIN_DIR_INPUT,PORT_PMUX_PMUXE_C_Val);
+
+		//make sure that step pin is input with mux to peripheral
+		setPinCfg(PIN_STEP_INPUT, PORT_PINCFG_PMUXEN | PORT_PINCFG_INEN | PORT_PINCFG_PULLEN);
+
+		//make sure that dir pin is an output with mux to peripheral
+		setPinCfg(PIN_DIR_INPUT, PORT_PINCFG_PMUXEN );
+
+		Serial1.begin(STEP_DIR_BAUD);
+
+	}
+	if (enableState == true  && lastState==false)
+	{
+		Serial1.end();
+		setPinMux(PIN_STEP_INPUT,pinMux[0]);
+		setPinMux(PIN_DIR_INPUT,pinMux[1]);
+		setPinCfg(PIN_STEP_INPUT,pinCFG[0]);
+		setPinCfg(PIN_DIR_INPUT,pinCFG[1]);
+		//turn step/dir pins back to GPIO
+		if (PORT_PMUX_PMUXE_A_Val == pinMux[0])
+		{
+			//if interrupt was enabled for step pin renable it.
+			EExt_Interrupts in = g_APinDescription[PIN_STEP_INPUT].ulExtInt;
+			EIC->INTENSET.reg = EIC_INTENCLR_EXTINT(1 << in); //enable the interrupt
+		}
+
+	}
+
+#endif //USE_STEP_DIR_SERIAL
+	lastState=enableState;
+}
 
 
 
@@ -528,7 +528,7 @@ void validateAndInitNVMParams(void)
 		nvmWrite_vPID(2.0, 1.0, 1.0);
 	}
 
-	if (false != ParametersValid((void *)&NVM->SystemParams,sizeof(NVM->SystemParams)))
+	if (false == ParametersValid((void *)&NVM->SystemParams,sizeof(NVM->SystemParams)))
 	{
 		SystemParams_t params;
 		params.microsteps=16;
@@ -887,8 +887,13 @@ void NZS::begin(void)
 			//TODO add code here for LCD and command line loop
 			while(false == stepperCtrl.calibrationValid())
 			{
+				GREEN_LED(1);
 				wdtClear();
 				commandsProcess(); //handle commands
+				if (!PinRead(PIN_CAL_BUTTON))
+				{
+					stepperCtrl.calibrateEncoder();
+				}
 				
 #ifndef DISABLE_LCD
 				Lcd.process();
@@ -898,6 +903,7 @@ void NZS::begin(void)
 			Lcd.setMenu(NULL);
 #endif
 		}
+		GREEN_LED(0);;
 
 		if (STEPCTRL_NO_ENCODER == stepCtrlError)
 		{
@@ -923,7 +929,11 @@ void NZS::begin(void)
 	stepPinSetup(); //setup the step pin
 
 #ifdef PIN_ENABLE
-	//PinEnableInterrupt(PIN_ENABLE,BOTH_EDGES,enableInput);
+	PinConfig(PIN_ENABLE);
+	
+	//because interrupt are fast and possible noise on line 
+	// we do not use interrupt, we call enableInput in the loop
+	// PinEnableInterrupt(PIN_ENABLE,BOTH_EDGES,enableInput);
 
 #else
 	//attachInterrupt(digitalPinToInterrupt(PIN_ERROR), enableInput, CHANGE);
@@ -1014,7 +1024,7 @@ void NZS::loop(void)
 	//read the enable pin and update
 	// this is also done as an edge interrupt but does not always see
 	// to trigger the ISR.
-	//enableInput();
+	enableInput();
 
 	if (enableState != stepperCtrl.getEnable())
 	{
@@ -1027,8 +1037,9 @@ void NZS::loop(void)
 //	eepromData.valid=1;
 //	eepromWriteCache((uint8_t *)&eepromData,sizeof(eepromData));
 
+	wdtClear();
 	commandsProcess(); //handle commands
-	processRS485(); //handle RS485 commands
+	//processRS485(); //handle RS485 commands
 #ifndef DISABLE_LCD
 	Lcd.process();
 #endif

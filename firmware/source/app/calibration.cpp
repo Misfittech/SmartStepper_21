@@ -351,7 +351,7 @@ void CalibrationTable::createFastCal(void)
 #ifdef NZS_FAST_CAL
 	int32_t i;
 	uint16_t cs=0;
-	uint16_t data[256];
+	uint16_t data[1024];
 	int32_t j;
 	j=0;
 	cs=0;
@@ -365,9 +365,9 @@ void CalibrationTable::createFastCal(void)
 		x=reverseLookup(i*4);
 		data[j]=x;
 		j++;
-		if (j>=256)
+		if (j>=ARRAY_LEN(data))
 		{
-			flashWrite((void *)&NVM->FastCal.angle[i-255],data,256*sizeof(uint16_t));
+			flashWrite((void *)&NVM->FastCal.angle[i-(ARRAY_LEN(data)-1)],data,ARRAY_LEN(data)*sizeof(uint16_t));
 			//LOG("Wrote fastcal at index %d-%d", i-255, i);
 			j=0;
 		}

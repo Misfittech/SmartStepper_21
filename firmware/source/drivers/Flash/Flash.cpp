@@ -269,6 +269,28 @@ void flashWriteUser(const volatile void *flash_ptr,const void *data, uint32_t si
 	flashWriteWords((uint32_t *)NVMCTRL_USER,(uint32_t *)buffer,FLASH_USER_PAGE_SIZE/4); //4 bytes in a word
 }
 
+bool isFlashErased(const volatile void *flash_ptr, uint32_t size)
+{
+	uint32_t *ptr=(uint32_t *)flash_ptr;
+	if ((uint32_t)ptr & 0x03) 
+	{
+		ERROR("address not word aligned");
+		return false;
+	}
+	
+	uint32_t i=0;
+	while(i<size)
+	{
+		if (*ptr != 0xFFFFFFFF)
+		{
+			return false;
+		}
+		ptr++;
+		i+=4;
+	}
+	return true;
+}
+
 #if 1
 //void flashWritePage(const volatile void *flash_ptr, const void *data, uint32_t size);
 uint32_t flashWrite(const volatile void *flash_ptr,const void *data, uint32_t size)
@@ -280,11 +302,15 @@ uint32_t flashWrite(const volatile void *flash_ptr,const void *data, uint32_t si
 	__attribute__((__aligned__(4))) uint8_t buffer[FLASH_BLOCK_SIZE];
 	uint32_t offset;
 	uint32_t n=size;
+	bool erased=false; 
 
 	destPtr=(uint8_t *)flash_ptr;
 	srcPtr=(uint8_t *)data;
-
-	LOG("flash write called addr 0x%X",destPtr);
+	
+	//check if the area is erased
+	
+	erased=isFlashErased(flash_ptr,size);
+	//LOG("flash write called addr 0x%X",destPtr);
 	while(size>0)
 	{
 		uint32_t i,j;
@@ -313,7 +339,11 @@ uint32_t flashWrite(const volatile void *flash_ptr,const void *data, uint32_t si
 		memcpy(&buffer[offset],srcPtr,i);
 
 		//erase page
-		flashErase(ptrPage,FLASH_BLOCK_SIZE);
+		if (!erased)
+		{
+			flashErase(ptrPage,FLASH_BLOCK_SIZE);
+		}
+		
 		//write new data to flash
 		flashWritePage((const volatile void *)ptrPage,(const void *)buffer,FLASH_BLOCK_SIZE);
 

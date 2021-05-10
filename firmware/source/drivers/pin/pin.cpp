@@ -200,7 +200,7 @@ void PinEnableInterrupt(pin_t pin, InterruptType_t type, voidCallback_t callback
 
 	}
 	uint32_t n=id;
-	if (n>8)
+	if (n>=8)
 	{
 		n = n - 8;
 		n=n*4;
